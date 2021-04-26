@@ -441,6 +441,19 @@
       </tags>
   </entry>
   <entry>
+    <title>Spark#5 Spark数据源</title>
+    <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/SparkSQL/%E6%95%B0%E6%8D%AE%E6%BA%90/</url>
+    <content><![CDATA[]]></content>
+      <categories>
+        <category>大数据</category>
+        <category>Spark</category>
+        <category>Spark SQL</category>
+      </categories>
+      <tags>
+        <tag>Spark</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Spark#4 Spark SQL概述</title>
     <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/SparkSQL/Spark%20SQL/</url>
     <content><![CDATA[<h1 id="Spark-SQL概述"><a href="#Spark-SQL概述" class="headerlink" title="Spark SQL概述"></a>Spark SQL概述</h1><p>Spark SQL是用于结构化数据处理的Spark模块。与Spark RDD API不同，Spark SQL提供的接口可以为Spark提供更多的数据及其计算时的结构信息。Spark使用这些额外的信息实现一些优化。用户可以使用SQL或者Dataset API对SparkSQL进行操作。由于它和用户使用的API或者开发语言无关，这意味着开发人员可以在多个API中轻松地切换</p>
@@ -495,19 +508,6 @@
 <h2 id="标量函数"><a href="#标量函数" class="headerlink" title="标量函数"></a>标量函数</h2><p>与聚合函数多行得到一个值返回不同，标量函数是每行返回一个值。Spark SQL支持多种<a href="https://spark.apache.org/docs/latest/sql-ref-functions.html#scalar-functions">Built-in Scalar Functions</a>，也支持<a href="https://spark.apache.org/docs/latest/sql-ref-functions-udf-scalar.html">User Defined Scalar Functions</a></p>
 <h2 id="聚合函数"><a href="#聚合函数" class="headerlink" title="聚合函数"></a>聚合函数</h2><p><code>Aggregate function</code>返回多行的一个值，<a href="https://spark.apache.org/docs/latest/sql-ref-functions-builtin.html#aggregate-functions">Built-in Aggregation Functions</a>提供了多种聚合函数——<code>count()</code>，<code>avg()</code>等等。用户也能自己创建聚合函数，更多细节参考<a href="https://spark.apache.org/docs/latest/sql-ref-functions-udf-aggregate.html">User Defined Aggregate Functions</a>。</p>
 ]]></content>
-      <categories>
-        <category>大数据</category>
-        <category>Spark</category>
-        <category>Spark SQL</category>
-      </categories>
-      <tags>
-        <tag>Spark</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Spark#5 Spark数据源</title>
-    <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/SparkSQL/%E6%95%B0%E6%8D%AE%E6%BA%90/</url>
-    <content><![CDATA[]]></content>
       <categories>
         <category>大数据</category>
         <category>Spark</category>
