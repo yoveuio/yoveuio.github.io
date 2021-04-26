@@ -3,61 +3,55 @@
   <entry>
     <title>Spark#2 RDD编程(上)</title>
     <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/RDD%E7%BC%96%E7%A8%8B%E4%B8%8A/</url>
-    <content><![CDATA[<h1>RDD编程的概念</h1>
-<h2 id="概述"><a class="header-anchor" href="#概述">¶</a>概述</h2>
-<p>每个Spark程序都包含一个运行<code>main()</code>方法的驱动程序，这个驱动程序能够在集群多个节点上并行操作。Spark提供了一种叫做<code>resilient distribute dataset(RDD)</code>的抽象，这个结构是在节点上运行程序的数据集合(程序)。RDD能由Hadoop文件系统中的文件初始化得到，也可以由驱动程序中的Scala集合转化得到。用户可以将RDD集合保存在内存中，这样可以让Spark程序高效的重用多个并行程序，减少以前Hadoop处理复杂业务出现的问题(Hadoop<code>Map-Reduce</code>过程后会将结果存在硬盘，导致如果需要多个Reduce过程的情景时出现大量磁盘IO，性能下降严重)。RDD也能将数据从故障节点中恢复。</p>
+    <content><![CDATA[<h1 id="RDD编程的概念"><a href="#RDD编程的概念" class="headerlink" title="RDD编程的概念"></a>RDD编程的概念</h1><h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>每个Spark程序都包含一个运行<code>main()</code>方法的驱动程序，这个驱动程序能够在集群多个节点上并行操作。Spark提供了一种叫做<code>resilient distribute dataset(RDD)</code>的抽象，这个结构是在节点上运行程序的数据集合(程序)。RDD能由Hadoop文件系统中的文件初始化得到，也可以由驱动程序中的Scala集合转化得到。用户可以将RDD集合保存在内存中，这样可以让Spark程序高效的重用多个并行程序，减少以前Hadoop处理复杂业务出现的问题(Hadoop<code>Map-Reduce</code>过程后会将结果存在硬盘，导致如果需要多个Reduce过程的情景时出现大量磁盘IO，性能下降严重)。RDD也能将数据从故障节点中恢复。</p>
 <p>Spark还能让并行程序之间共享变量。默认情况下，Spark在集群中的不同节点上运行一个function来执行一组任务，它会向所有节点发送一个变量副本。如果一个变量需要被多个任务或者任务与驱动程序之间共享，Spark支持两种方式共享变量：<code>broadcast variables</code>(广播变量，在每个节点的内存中缓存一个值)和<code>accumulators</code>(累加器，仅仅允许变量执行加法，比如计数器和算术和)</p>
 <p>本章将会演示Scala完成这些功能</p>
 <span id="more"></span>
-<h2 id="编程"><a class="header-anchor" href="#编程">¶</a>编程</h2>
-<h3 id="连接Spark准备环境"><a class="header-anchor" href="#连接Spark准备环境">¶</a>连接Spark准备环境</h3>
-<p>本章通过<code>spark-shell</code>进行简单的API讲解</p>
-<h4 id="导入依赖包"><a class="header-anchor" href="#导入依赖包">¶</a>导入依赖包</h4>
-<p>在正式开始写代码之前，我们需要导入需要的包。可以在spark项目下的<code>build.sbt</code>文件中导入以下依赖包：</p>
+
+<h2 id="编程"><a href="#编程" class="headerlink" title="编程"></a>编程</h2><h3 id="连接Spark准备环境"><a href="#连接Spark准备环境" class="headerlink" title="连接Spark准备环境"></a>连接Spark准备环境</h3><p>本章通过<code>spark-shell</code>进行简单的API讲解</p>
+<h4 id="导入依赖包"><a href="#导入依赖包" class="headerlink" title="导入依赖包"></a>导入依赖包</h4><p>在正式开始写代码之前，我们需要导入需要的包。可以在spark项目下的<code>build.sbt</code>文件中导入以下依赖包：</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="comment">// https://mvnrepository.com/artifact/org.apache.spark/spark-core</span></span><br><span class="line">libraryDependencies += <span class="string">&quot;org.apache.spark&quot;</span> %% <span class="string">&quot;spark-core&quot;</span> % <span class="string">&quot;3.1.1&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// https://mvnrepository.com/artifact/org.apache.spark/spark-sql</span></span><br><span class="line">libraryDependencies += <span class="string">&quot;org.apache.spark&quot;</span> %% <span class="string">&quot;spark-sql&quot;</span> % <span class="string">&quot;3.1.1&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-client</span></span><br><span class="line"><span class="comment">// 如果你需要使用HDFS集群，导入下面这个包。需要提前配置Hadoop</span></span><br><span class="line">libraryDependencies += <span class="string">&quot;org.apache.hadoop&quot;</span> % <span class="string">&quot;hadoop-client&quot;</span> % <span class="string">&quot;3.3.0&quot;</span></span><br></pre></td></tr></table></figure>
+
 <p>然后在项目根目录运行<code>sbt reload</code>指令从maven仓库下载对应依赖包</p>
-<h4 id="交互式的开发环境"><a class="header-anchor" href="#交互式的开发环境">¶</a>交互式的开发环境</h4>
-<p>使用<code>&#123;YOUR_SPARK_HOME&#125;/bin/spark-shell</code>进入交互式开发环境：</p>
+<h4 id="交互式的开发环境"><a href="#交互式的开发环境" class="headerlink" title="交互式的开发环境"></a>交互式的开发环境</h4><p>使用<code>&#123;YOUR_SPARK_HOME&#125;/bin/spark-shell</code>进入交互式开发环境：</p>
 <p><img src="https://gitee.com/yovette/Images/raw/master/img/20210413215400.png" alt="image-20210413215349408"></p>
 <p>最后，import你需要的类：</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> org.apache.spark.<span class="type">SparkContext</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.<span class="type">SparkConf</span></span><br></pre></td></tr></table></figure>
-<h3 id="初始化Spark"><a class="header-anchor" href="#初始化Spark">¶</a>初始化Spark</h3>
-<p><strong>每个Spark程序的第一件要做的事就是创建一个SparkContext对象</strong>(spark-shell会帮助我们创建这个对象，完成初始化)，这个对象告诉Spark应该如何访问一个集群。同时，这个SparkContent还需要一个SparkConf对象来告诉它项目的一些信息。每个JVM中只允许一个SparkContext程序执行。因此在创建一个SparkContext之前，必须调用<code>stop()</code>方法终止已经在运行的SparkContext。<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210414142749.png" alt="image-20210414142724846"></p>
+
+<h3 id="初始化Spark"><a href="#初始化Spark" class="headerlink" title="初始化Spark"></a>初始化Spark</h3><p><strong>每个Spark程序的第一件要做的事就是创建一个SparkContext对象</strong>(spark-shell会帮助我们创建这个对象，完成初始化)，这个对象告诉Spark应该如何访问一个集群。同时，这个SparkContent还需要一个SparkConf对象来告诉它项目的一些信息。每个JVM中只允许一个SparkContext程序执行。因此在创建一个SparkContext之前，必须调用<code>stop()</code>方法终止已经在运行的SparkContext。<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210414142749.png" alt="image-20210414142724846"></p>
 <p>图中已经有了一个<code>sc</code>的SparkContext实例，需要先调用<code>stop</code>方法</p>
 <p>用以下方法开启一个新的<code>SparkContext</code></p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> conf = <span class="keyword">new</span> <span class="type">SparkConf</span>().setAppName(appName).setMaster(master)</span><br><span class="line">scala&gt; <span class="keyword">new</span> <span class="type">SparkContext</span>(conf)</span><br></pre></td></tr></table></figure>
+
 <p><code>appName</code>参数是应用向<code>cluster UI</code>展示的名字。<code>master</code>参数表示集群的master的URL(Spark，Mesos或者YRAN集群)，也可以是由“local”字符串表示的本地运行模式。不过在实际应用中，当集群运行时，不会将master在代码中硬编码，而是在使用<code>spark submit</code>启动应用程序时指定。不过在本地测试或者单机测试中，直接通过“local”类运行Spark程序更加方便</p>
-<h2 id="Shell的使用"><a class="header-anchor" href="#Shell的使用">¶</a>Shell的使用</h2>
-<p>在Spark Shell中，会帮用户创建一个叫做sc的SparkContext。如上文所述，这个sc会让我们自己创建SparkContext无法工作。</p>
+<h2 id="Shell的使用"><a href="#Shell的使用" class="headerlink" title="Shell的使用"></a>Shell的使用</h2><p>在Spark Shell中，会帮用户创建一个叫做sc的SparkContext。如上文所述，这个sc会让我们自己创建SparkContext无法工作。</p>
 <p>在执行spark-shell指令时，可以使用<code>--master</code>参数设置master，<code>--jar</code>参数指定要运行的JAR包，我们还能通过<code>--package</code>参数向shell session中添加maven依赖。</p>
 <p>如果你想要了解更多的参数，运行<code>spark-shell --help</code>指令可以得到相关的文档。</p>
-<h2 id="Resilient-Distributed-Datasets-RDDs"><a class="header-anchor" href="#Resilient-Distributed-Datasets-RDDs">¶</a>Resilient Distributed Datasets(RDDs)</h2>
-<h3 id="Parallelized并行集合"><a class="header-anchor" href="#Parallelized并行集合">¶</a>Parallelized并行集合</h3>
-<p>并行化集合可以通过调用<code>SparkContext.parallelize</code>方法，从spark程序中已经存在的集合中创建。这个元素集合可以被驱动程序复制到各个集群节点，<strong>形成可以并行操作的分布式数据集</strong>。见下面例子</p>
+<h2 id="Resilient-Distributed-Datasets-RDDs"><a href="#Resilient-Distributed-Datasets-RDDs" class="headerlink" title="Resilient Distributed Datasets(RDDs)"></a>Resilient Distributed Datasets(RDDs)</h2><h3 id="Parallelized并行集合"><a href="#Parallelized并行集合" class="headerlink" title="Parallelized并行集合"></a>Parallelized并行集合</h3><p>并行化集合可以通过调用<code>SparkContext.parallelize</code>方法，从spark程序中已经存在的集合中创建。这个元素集合可以被驱动程序复制到各个集群节点，<strong>形成可以并行操作的分布式数据集</strong>。见下面例子</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> data = <span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>)</span><br><span class="line">scala&gt; <span class="keyword">val</span> distData = sc.parallelize(data)</span><br></pre></td></tr></table></figure>
+
 <p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210414151035.png" alt="并行化集合"></p>
 <p>可以看到，已经得到RDD对象</p>
 <p>完成创建后，就能并行地操作分布式数据集。例如用户可以调用<code>distData.reduce((a, b) =&gt; a + b)</code>来对数组求和。我们稍后会讲解分布式数据集中的操作。</p>
 <p><strong>并行集合还有一个非常重要的内容——确定分区（也就是Hadoop上面的切片）数量并将数据集进行切分</strong>。Spark将在集群中每个分区上运行一个任务。通常，用户会在每个CPU上处理2-4个分区。我们可以在并行化数据的时候传入第二个参数(e.g.<code>sc.parallelize(data, 10)</code>)显示指定。如果我们不指定的话，spark会基于集群自动确定分区数量。</p>
-<h3 id="External-Datasets-外部数据集"><a class="header-anchor" href="#External-Datasets-外部数据集">¶</a>External Datasets(外部数据集)</h3>
-<p>如前文所述，Spark的数据集从Hadoop支持的任意格式转化而来。如：本地的文件系统，HDFS，Cassandra，HBase，etc。</p>
+<h3 id="External-Datasets-外部数据集"><a href="#External-Datasets-外部数据集" class="headerlink" title="External Datasets(外部数据集)"></a>External Datasets(外部数据集)</h3><p>如前文所述，Spark的数据集从Hadoop支持的任意格式转化而来。如：本地的文件系统，HDFS，Cassandra，HBase，etc。</p>
 <p>TextFileRDDs可以使用<code>textFile()</code>方法创建。这个方法获取文件的URL，并通过行的格式对文件进行读取。下面是一个典型的例子</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> distFile = sc.textFile(<span class="string">&quot;data.txt&quot;</span>)</span><br></pre></td></tr></table></figure>
+
 <p>创建成功之后，我们就能通过数据集操作进行一些处理。例如我们统计所有文本的长度之和：</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; distFile.map(s =&gt; s.length).reduce((a, b) =&gt; a + b)</span><br></pre></td></tr></table></figure>
+
 <p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210414193139.png" alt="distFile操作"></p>
 <p>下面是关于spark一些注意事项</p>
 <ul>
-<li>
-<p>如果使用本地文件系统，需要保证每个worker nodes上面都有一个相同路径的文件。否则需要将这个文件拷贝到所有的worker中或者使用网络中的文件共享系统</p>
+<li><p>如果使用本地文件系统，需要保证每个worker nodes上面都有一个相同路径的文件。否则需要将这个文件拷贝到所有的worker中或者使用网络中的文件共享系统</p>
 </li>
-<li>
-<p>spark中所有基于文件的输入方式(包括textFile)，都支持目录、压缩包和通配符。例如</p>
+<li><p>spark中所有基于文件的输入方式(包括textFile)，都支持目录、压缩包和通配符。例如</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">textFile(<span class="string">&quot;my/directory&quot;</span>)</span><br><span class="line">textFile(<span class="string">&quot;my/directory/*.txt&quot;</span>)</span><br><span class="line">textFile(<span class="string">&quot;my/directory/*.gz&quot;</span>)</span><br></pre></td></tr></table></figure>
+
 <p>当读取复杂文件时，分区的顺序取决于文件返回的顺序，也就意味着这些文件可能不遵循文件系统上面的字典排序。不过在分区内部，元素的排序还是按照文件底层中的顺序排列。</p>
 </li>
-<li>
-<p><code>textFile</code>方法可以选择传入第二个参数——用于控制文件分区的数量。默认情况下 ，Spark为每一个文件块创建一个分区(在HDFS中默认为128MB)，通过这个参数我们可以要求更多数量的分区。不过要注意的是，分区数量不能少于文件块的数量。</p>
+<li><p><code>textFile</code>方法可以选择传入第二个参数——用于控制文件分区的数量。默认情况下 ，Spark为每一个文件块创建一个分区(在HDFS中默认为128MB)，通过这个参数我们可以要求更多数量的分区。不过要注意的是，分区数量不能少于文件块的数量。</p>
 </li>
 </ul>
 <p>对于文件的拆分，Spark Scala API还有其他几种格式</p>
@@ -66,43 +60,42 @@
 <li>对于Hadoop其他输入格式，我们能使用<code>SparkContext.hadoopRDD</code>方法。设置他们的方式和输入源的Hadoop作业的方式相同。也能使用基于<code>MapRedcue</code>API的<code>SparkContext.newAPIHadoopRDD</code></li>
 <li><code>RDD.savaAsObjectFile</code>和<code>SparkContext.objectFile</code>支持将一个Java序列化对象保存为RDD格式。不过性能肯定是没有Avro那么优秀。</li>
 </ul>
-<h3 id="RDD-Operations"><a class="header-anchor" href="#RDD-Operations">¶</a>RDD Operations</h3>
-<p>RDDs支持两种类型的操作：</p>
+<h3 id="RDD-Operations"><a href="#RDD-Operations" class="headerlink" title="RDD Operations"></a>RDD Operations</h3><p>RDDs支持两种类型的操作：</p>
 <ul>
 <li><code>transformations</code>：支持从一个已有的RDD，创建一个新的</li>
 <li><code>actions</code>：在数据集计算完成之后给驱动程序返回一个计算结果</li>
 </ul>
 <p>在Spark中，所有的<code>transformation</code>都是<strong>lazy</strong>的。也就是说它们不会立刻计算出结果，而只记录应用于某个基本数据集的转换。只有当action操作需要结果时，才会真正去计算并返回给驱动程序。这种设计让Spark更加有效率。例如，当程序意识到通过<code>map</code>创建的数据集将用于<code>reduce</code>，并向驱动程序返回<code>reduce</code>结果而不是较大的<code>map</code>结果集，这可以减少大量的磁盘IO。</p>
-<p>默认情况下，<strong>每次执行<code>action</code>操作都需要重新计算一次<code>transformed RDD</code></strong>。不过我们也可以让<strong>RDD常驻在内存中</strong>，这样Spark会将元素保留在集群中，下次查询时不需要重新执行<code>transformed</code>操作。RDD也可以保存到磁盘中或者复制到其他节点。</p>
-<h4 id="基础操作"><a class="header-anchor" href="#基础操作">¶</a>基础操作</h4>
-<p>下面演示RDD基础操作：</p>
+<p>默认情况下，<strong>每次执行<code>action</code>操作都需要重新计算一次<code>transformed RDD</code><strong>。不过我们也可以让</strong>RDD常驻在内存中</strong>，这样Spark会将元素保留在集群中，下次查询时不需要重新执行<code>transformed</code>操作。RDD也可以保存到磁盘中或者复制到其他节点。</p>
+<h4 id="基础操作"><a href="#基础操作" class="headerlink" title="基础操作"></a>基础操作</h4><p>下面演示RDD基础操作：</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> lines = sc.textFile(<span class="string">&quot;data.txt&quot;</span>)</span><br><span class="line">scala&gt; <span class="keyword">val</span> lineLengths = lines.map(s =&gt; s.length)</span><br><span class="line">scala&gt; <span class="keyword">val</span> totalLength = lineLengths.reduce((a, b) =&gt; a + b)</span><br></pre></td></tr></table></figure>
+
 <p>第一条指令是从外部文件中定义一个RDD。此时这个数据集没有加载到内存中或者执行其他操作，这个lines变量仅仅是一个文件指针</p>
 <p>第二条指令定义了一个<code>lineLengths</code>的RDD结果集，用于记录<code>map transformation</code>的结果。再强调一次，由于<code>transformation</code>的lazy特点，此时并没有计算出结果。</p>
 <p>最后我们执行<code>reduce</code>操作，此时Spark将计算分成几个任务分布在不同的机器上运行，每台机器运行之前map中的一部分，并且计算出reduction结果发往驱动程序。</p>
 <p>如果我们等会还会用到这个reduce结果，可以将其保存到内存中：</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">lineLengths.persist()</span><br></pre></td></tr></table></figure>
-<h4 id="Spark中的函数传递"><a class="header-anchor" href="#Spark中的函数传递">¶</a>Spark中的函数传递</h4>
-<p>Spark API非常依赖从驱动程序将函数传递到集群中运行。这里有两种方式去实现：</p>
+
+<h4 id="Spark中的函数传递"><a href="#Spark中的函数传递" class="headerlink" title="Spark中的函数传递"></a>Spark中的函数传递</h4><p>Spark API非常依赖从驱动程序将函数传递到集群中运行。这里有两种方式去实现：</p>
 <ol>
-<li>
-<p>对于函数体比较小的函数，可以使用匿名函数</p>
+<li><p>对于函数体比较小的函数，可以使用匿名函数</p>
 </li>
-<li>
-<p>在单例object中定义静态方法。例如我们可以向下面那样定义一个<code>MyFunctions</code>：</p>
+<li><p>在单例object中定义静态方法。例如我们可以向下面那样定义一个<code>MyFunctions</code>：</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="class"><span class="keyword">object</span> <span class="title">MyFunctions</span></span>&#123;</span><br><span class="line">     | 	<span class="function"><span class="keyword">def</span> <span class="title">func1</span></span>(s:<span class="type">String</span>): <span class="type">String</span>=&#123; ... &#125;</span><br><span class="line">     | &#125;</span><br></pre></td></tr></table></figure>
+
 <p>也可以将Class实例中的方法传递给方法，不过需要传递对应的对象。例如：</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">MyClass</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">func1</span></span>(s: <span class="type">String</span>): <span class="type">String</span> = &#123; ... &#125;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">doStuff</span></span>(rdd: <span class="type">RDD</span>[<span class="type">String</span>]): <span class="type">RDD</span>[<span class="type">String</span>] = &#123; rdd.map(func1) &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
 <p>上面是一种很好的编程演示，<code>doStuff(rdd)</code>明显比<code>rdd.map(x =&gt; this.func1(x))</code>优雅很多。</p>
 <blockquote>
 <p>要注意的是，我们编程时应该避免对全局对象的引用。可以选择将全局对象拷贝一份到局部变量，这样可以省去我们很多的麻烦</p>
 </blockquote>
 </li>
 </ol>
-<h4 id="闭包"><a class="header-anchor" href="#闭包">¶</a>闭包</h4>
-<p>理解变量以及方法在集群运行时的作用范围和生命周期是Spark学习中的一大难点。在变量作用域范围之外修改的RDD操作经常造成程序的混淆。接下来我们将以<code>foreach()</code>为例看看这样一个问题（其他操作也会出现类似的问题）</p>
+<h4 id="闭包"><a href="#闭包" class="headerlink" title="闭包"></a>闭包</h4><p>理解变量以及方法在集群运行时的作用范围和生命周期是Spark学习中的一大难点。在变量作用域范围之外修改的RDD操作经常造成程序的混淆。接下来我们将以<code>foreach()</code>为例看看这样一个问题（其他操作也会出现类似的问题）</p>
 <p>下面是一个简单演示程序，程序能否成功取决于操作是否发生在同一台JVM上面。例如本地运行的Spark程序与提交到YARN调度的集群中的程序运行结果会有不同。</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">var</span> counter = <span class="number">0</span></span><br><span class="line"><span class="keyword">var</span> rdd = sc.parallelize(data)</span><br><span class="line"></span><br><span class="line"><span class="comment">// Wrong: Don&#x27;t do this!!</span></span><br><span class="line">rdd.foreach(x =&gt; counter += x)</span><br><span class="line"></span><br><span class="line">println(<span class="string">&quot;Counter value: &quot;</span> + counter)</span><br></pre></td></tr></table></figure>
+
 <p>上面代码是不明确的，可能无法按照预期需求来工作。</p>
 <p>为了执行作业，Spark将RDD操作过程拆分成多个任务，并且在不同执行器上执行不同的任务。在<strong>执行任务的过程中，Spark计算这些任务闭包</strong>。所谓的闭包就是那些对RDD执行计算时持有可见的<code>自由变量或方法</code>(在上例中的<code>foreach()</code>)。这些闭包将被序列化并发送到其他的执行器上。</p>
 <p>而发送到其他执行上的变量是闭包内部的副本，也就是说foreach方法中的<code>counter</code>并不是驱动程序中的counter中的。在驱动点节点的内存中有一个计数器，但执行者不再能看到它。这个持有者只能看到序列化闭包的副本，进行的rdd也操作也只改变了副本中的值。因此在所有操作结束后，计数器的值仍然是0</p>
@@ -121,29 +114,135 @@
       </tags>
   </entry>
   <entry>
+    <title>Spark#3 RDD编程(下)</title>
+    <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/RDD%E7%BC%96%E7%A8%8B%E4%B8%8B/</url>
+    <content><![CDATA[<h1 id="RDD操作"><a href="#RDD操作" class="headerlink" title="RDD操作"></a>RDD操作</h1><p>本文主要讲解RDD的相关操作</p>
+<span id="more"></span>
+
+<h2 id="键值对操作"><a href="#键值对操作" class="headerlink" title="键值对操作"></a>键值对操作</h2><p>虽然大多数的Spark操作可以在包含任何类型的RDD上运行，但有一些特殊操作仅在键值对的RDD上可用。最常见的是<code>shuffle</code>操作，例如根据键对元素进行分组和聚合。</p>
+<p>在Scala中，这些操作可以顺其自然的在包含<code>Tuple2</code>对象的RDD上操作</p>
+<blockquote>
+<p>这个Tuple2是只包含两个元素的Tuple对象。可以简单的理解成C++中的pair。</p>
+</blockquote>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> lines = sc.textFile(<span class="string">&quot;data.txt&quot;</span>)</span><br><span class="line"><span class="keyword">val</span> pairs = lines.map(s =&gt; (s, <span class="number">1</span>))</span><br><span class="line"><span class="keyword">val</span> counts = pairs.reduceByKey((a, b) =&gt; a + b)</span><br></pre></td></tr></table></figure>
+
+<h2 id="Transformations操作"><a href="#Transformations操作" class="headerlink" title="Transformations操作"></a>Transformations操作</h2><h2 id="Actions操作"><a href="#Actions操作" class="headerlink" title="Actions操作"></a>Actions操作</h2><blockquote>
+<p> 上面两个操作前文多次提及这里不再赘述</p>
+<p> 值得一提的是，Spark RDD API还公开了一些操作的异步版本。它们会立刻返回给调用者而不是在操作完成之后阻塞</p>
+</blockquote>
+<h2 id="Shuffle操作-洗牌"><a href="#Shuffle操作-洗牌" class="headerlink" title="Shuffle操作(洗牌)"></a>Shuffle操作(洗牌)</h2><p>Spark某些操作会触发一个叫做shuffle(洗牌)的事件。shuffle是Spark中在分区之间进行分组的一种机制</p>
+<p>由于这些操作常常涉及到执行器和机器之间的数据拷贝，shuffle操作是复杂且费时的</p>
+<p>为了理解shuffle发生了些什么，我们以<code>reduceByKey</code>为例子进行考虑。<code>reduceByKey</code>操作会产生一个新的RDD——由同一种key而被合并到同一个元组的value集合。并非单个键的所有值都在同一分区，同一机器，但必须将它们放在同一位置以计算结果</p>
+<p>在Spark中，为了一些特定的操作，数据通常不会跨分区分布，而是在一些特定的位置。在计算时，一个任务只会操作一个分区。因此，要组织单个<code>reduceByKey</code>任务要执行的所有数据，Spark需要进行一个<code>all to all</code>操作。需要读取所有key的所有value，然后将所有分区的值集合起来计算每个键的最终结果，这个操作就是<code>shuffle</code>。</p>
+<p>尽管shuffled产生的各个分区中的元素集合是确定的，然而分区之间、分区内的元素之间的顺序并不是确定的。如果希望能够得到确定的顺序，可以像下面这样用</p>
+<ul>
+<li><code>mapPartitions</code>来进行对分区进行排序</li>
+<li><code>repartitionAndSortWithinPartitions</code>在重新分区的同时有效地进行分区内部地排序</li>
+<li><code>sortBy</code>使RDD全局有序</li>
+</ul>
+<p>能够导致shuffle操作的有<code>repartition</code>和<code>coalesce</code>形成的<code>repartition</code>，<code>groupByKey</code>和<code>reduceByKey</code>形成的<code>ByKey</code>操作，以及<code>cogroup</code>和<code>join</code>这样的<code>join</code>操作</p>
+<h3 id="性能影响"><a href="#性能影响" class="headerlink" title="性能影响"></a>性能影响</h3><p>由于涉及到磁盘IO和网络IO，Shuffle的开销是非常大的。为了处理Shuffle中的数据，Spark生成一组任务——map任务来处理数据，并且又采用一组reduce任务来统计它们。这个术语来自<code>MapReduce</code>，和Spark自己的<code>map</code>和<code>reduce</code>操作没什么关系</p>
+<p>在内部，若非内存空间不足，每个map中的结果会一直保存到内存中。然后将对分区里面的数据进行排序并写入文件当中。在<code>reduce</code>阶段，将会读取这些已经排序好的块。因为shuffle阶段是在内存中对数据进行记录，因此其操作会占用大量的内存空间。特别的，<code>reduceBByKey</code>和<code>aggregateByKey</code>是在map阶段创建内存中的数据结构，<code>ByKey</code>会在reduce阶段创建数据结构。<strong>当内存中无法存放数据时，Spark将会将数据溢出到磁盘中。故会产生一些额外的磁盘IO以及垃圾收集的开销。</strong></p>
+<p><strong>Shuffle也会在磁盘上产生大量的中间文件</strong>。在Spark1.3中，这些文件会一直存在直到对应的RDD不再使用而被垃圾收集。如果程序一直保留着RDDs的引用或者GC频率很低，可能会让垃圾收集很久之后才会发生。这也就意味着，一个Spark程序运行一段时间之后，会占用大量的磁盘空间。</p>
+<blockquote>
+<p>临时存储目录在配置Spark Context时由<code>spark.local.dir</code>参数指定。</p>
+<p>Shuffle行为也可以通过配置参数来进行调整。</p>
+</blockquote>
+<h2 id="RDD持久化"><a href="#RDD持久化" class="headerlink" title="RDD持久化"></a>RDD持久化</h2><p>相比于Hadoop，Spark可以让操作之间的数据集持久化存储。当持久化了一个RDD时，每个节点将会存储所有的分区的计算结果，并在其他对这个数据集的actions操作时重用这些数据。缓存是用于迭代算法和快速交互的关键工具</p>
+<p><strong>用户可以使用<code>persist()</code>或者<code>cache()</code>方法标记一个RDD</strong>，让其在内存中缓存。当其第一次在action操作中计算时，会被保留在内存中。Spark’s cache是容错的——如果RDD中的一个分区丢失了，就会自动从创建它的<code>transformation</code>操作中重新计算</p>
+<p>除此之外，<strong>被缓存的RDD有不同的存储级别</strong>。允许用户控制存储，例如存储在磁盘、存储在内存、复制到其他节点上。这些级别可以通过传递<code>StorageLevel</code>对象给<code>persist()</code>方法来控制。<code>cache</code>方法只有默认级别(<code>StorageLevel.MEMORY_ONLY</code>， 在内存中存储序列化对象)的存储级别。</p>
+<p>完整的存储级别如下：</p>
+<table>
+<thead>
+<tr>
+<th>存储级别</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>MEMORY_ONLY</code></td>
+<td>将RDD以反序列化的Java对象存入JVM中，如果内存中存储空间不够，一些分区将无法存储只能在它们被调用的时候重新计算，这是默认的存储级别</td>
+</tr>
+<tr>
+<td><code>MEMORY_AND_DISK</code></td>
+<td>将RDD以反序列化的Java对象存入JVM中，如果内存不足，将其存入磁盘，并在需要时从磁盘调用</td>
+</tr>
+<tr>
+<td><code>MEMORY_ONLY_SER</code></td>
+<td>将RDD以序列化的Java对象的方式存储(每个分区存储一个字节数组)。相比于反序列的方式，这往往能够有效地利用空间，不过在读取时，CPU负担更重</td>
+</tr>
+<tr>
+<td><code>MEMORY_AND_DISK_SER</code></td>
+<td>和上面类似。不过是将内存存储不下的分区溢出到磁盘，而不是每次需要时重新计算</td>
+</tr>
+<tr>
+<td><code>DISK_ONLY</code></td>
+<td>只在磁盘内存储RDD</td>
+</tr>
+<tr>
+<td><code>MEMORY_ONLY_2</code><br /><code>MEMORY_AND_DISK_2</code><br /><code>etc</code></td>
+<td>和上面的类似，不过会在两个集群节点中复制所有的分区</td>
+</tr>
+<tr>
+<td><code>OFF_HEAD(experimental)</code></td>
+<td>与<code>MEMORY_ONLY_SER</code>类似，但是将数据存储在堆外存储器中。这需要开启堆外内存</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>注意</strong>：在Python中，存储对象始终使用<code>Pickle</code>库进行序列化，因此它不在意是否选择序列化的方式。</p>
+</blockquote>
+<p>Spark默认缓存Shuffle操作的中间结果(即便用户没有调用persist方法)。这是为了防止在Shuffle阶段节点故障，而导致重新计算输入。</p>
+<h3 id="如何选择存储级别"><a href="#如何选择存储级别" class="headerlink" title="如何选择存储级别"></a>如何选择存储级别</h3><p>Spark存储级别的不同意味着内存空间和CPU性能之间的权衡。我们一般基于下面的步骤考虑来选择使用哪一个存储级别：</p>
+<ul>
+<li>如果由足够的空间存储RDD，就使用<code>MEMORY_ONLY</code>的存储级别。这是最有效利用CPU的选择</li>
+<li>如果没有足够的空间，尝试用<code>MEMORY_ONLY_SER</code>的隔离级别，并选择一个速度够快的序列化库，对于Java或者Scala来说是一种非常合适的途径</li>
+<li>除非计算数据集的代价非常高或者数据太多，否则不要将数据溢出到磁盘。重新计算可能比从磁盘中读取的速度更快</li>
+<li>如果希望集群容错性更强可以选择将数据复制到多个节点。用户可以从其他节点中得到数据，而不是重新计算</li>
+</ul>
+<h3 id="溢出数据"><a href="#溢出数据" class="headerlink" title="溢出数据"></a>溢出数据</h3><p>Spark监控缓存，并使用LRU策略将久的数据分区移出。如果希望手动移出RDD，可以使用<code>RDD.unpersist</code>方法。注意这个方法默认不阻塞。如果要阻塞直到资源被释放，在调用方法时设置<code>blocking=true</code></p>
+<h2 id="Shared-Variables共享变量"><a href="#Shared-Variables共享变量" class="headerlink" title="Shared Variables共享变量"></a>Shared Variables共享变量</h2><p>通常来说，当一个方法传递给Spark集群的远程节点中执行时(类似map或者reduce方法)。它会在这个函数使用的所有变量的副本上面执行。这些变量复制到每一台机器中，并且远程工作的机器不会将更改过的变量带给驱动程序。跨任务支持通用的读写共享变量将是低效的。不过Spark提供了两种有效的共享变量：<code>broadcast Variables</code>和<code>accumulators</code></p>
+<h3 id="Broadcast-Variables广播变量"><a href="#Broadcast-Variables广播变量" class="headerlink" title="Broadcast Variables广播变量"></a>Broadcast Variables广播变量</h3><p>广播变量允许程序在每一台机器中缓存一个只读的共享变量。使用其可以为每个节点提供一个大型输入数据集的副本。Spark还尝试使用高效广播算法分发广播变量，以降低通信成本。</p>
+<p>Spark Action在一组由Shuffle操作分割出的阶段执行。Spark自动每个阶段中间，广播任务需要的常见的数据。这些数据以序列化缓存在内存中，并在任务执行前反序列化。这也意味着这些广播变量只有在各个阶段任务需要相同的变量或者反向形式中缓存数据时有用。</p>
+<p>广播变量通过调用<code>SparkContext.broadcast</code>方法创建。通过调用广播变量的<code>value</code>方法可以获取值</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> broadcastVar = sc.broadcast(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>))</span><br><span class="line">broadcastVar: org.apache.spark.broadcast.<span class="type">Broadcast</span>[<span class="type">Array</span>[<span class="type">Int</span>]] = <span class="type">Broadcast</span>(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; broadcastVar.value</span><br><span class="line">res0: <span class="type">Array</span>[<span class="type">Int</span>] = <span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>)</span><br></pre></td></tr></table></figure>
+
+<p>为了保证每个节点获取的广播变量是一致的，广播对象一旦创建不能修改。如果想要释放变量占用的资源——调用<code>unpersist</code>方法。如果广播之后被再次使用，它将重新广播。如果想要永久的删除变量，调用<code>destroy</code>方法。这些方法默认都是不会阻塞的，可以在调用方法时传入<code>blocking=true</code>，来阻塞资源。</p>
+<h3 id="Accumulators累加器"><a href="#Accumulators累加器" class="headerlink" title="Accumulators累加器"></a>Accumulators累加器</h3><p>累加器时只能进行加法的一种变量。可以用作计数器或者是求和。</p>
+<p>用户可以通过<code>SparkContext.longAccumulator</code>或者<code>SparkContext.doubleAccumulator</code>创建一个Long或者Double类型的累加器。任务可以对这个累加器进行加法操作。然而，它们是不能读取这个累加器的值的。只有驱动程序才能使用<code>value</code>方法得到值。</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> accum = sc.longAccumulator(<span class="string">&quot;My Accumulator&quot;</span>)</span><br><span class="line">scala&gt; sc.parallelize(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>)).foreach(x =&gt; accum.add(x))</span><br><span class="line">scala&gt; accum.value</span><br><span class="line">res2: <span class="type">Long</span> = <span class="number">10</span></span><br></pre></td></tr></table></figure>
+
+]]></content>
+      <categories>
+        <category>大数据</category>
+        <category>Spark</category>
+        <category>Spark Core</category>
+      </categories>
+      <tags>
+        <tag>Spark</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Spark#1 第一个Spark程序</title>
     <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/Spark%E5%85%A5%E9%97%A8/</url>
-    <content><![CDATA[<h1>Spark入门</h1>
-<blockquote>
+    <content><![CDATA[<h1 id="Spark入门"><a href="#Spark入门" class="headerlink" title="Spark入门"></a>Spark入门</h1><blockquote>
 <p>笔者水平有限，结合官方文档，并加入自己编程时的。如有疑惑可以参阅官方文档：<a href="https://spark.apache.org/docs/latest/quick-start.html">https://spark.apache.org/docs/latest/quick-start.html</a></p>
 </blockquote>
 <span id="more"></span>
-<h2 id="Spark-Shell编程"><a class="header-anchor" href="#Spark-Shell编程">¶</a>Spark Shell编程</h2>
-<p>Spark shell是一个强大的交互式分析数据的工具，为我们学习Spark API提供了一种简单易行的学习方法。调用下面这条指令开始Scala编程：</p>
+
+<h2 id="Spark-Shell编程"><a href="#Spark-Shell编程" class="headerlink" title="Spark Shell编程"></a>Spark Shell编程</h2><p>Spark shell是一个强大的交互式分析数据的工具，为我们学习Spark API提供了一种简单易行的学习方法。调用下面这条指令开始Scala编程：</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">./bin/spark-shell</span><br></pre></td></tr></table></figure>
+
 <p>数据在Spark中被抽象成一种被称为<code>Dataset</code>的分布式items集合，Datasets能使用Hadoop的输入格式(像HDFS)创建，也能从其他的Datasets转化。我们能通过调用<code>action</code>(主要是对Dateset进行最后的操作，比如遍历、reduce、保存到文件等等)直接从Datasets中获取值，也能通过<code>transformation</code>(针对已有的Dataset创建一个新的Dataset)这个数据集来获取新的内容。</p>
 <blockquote>
 <p>map就是一个<code>transformation</code>的过程，用于将已有的Dataset的每个元素传入到一个自定义的函数，并获取一个新的元素，而新的元素可以组成一个新的Dataset</p>
 <p><code>transformation</code>的特点是lazy特性。如果一个spark应用中只定义了transformation操作，那么即时执行该应用，这些操作也不会执行。也就意味着transformation是不会触发spark的执行的。</p>
 </blockquote>
 <p>下面以README.md为例</p>
-<h3 id="直接从Datasets中获取"><a class="header-anchor" href="#直接从Datasets中获取">¶</a>直接从Datasets中获取</h3>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> textFile = spark.read.textFile(<span class="string">&quot;README.md&quot;</span>)</span><br><span class="line">textFile: org.apache.spark.sql.<span class="type">Dataset</span>[<span class="type">String</span>] = [value: string]</span><br><span class="line"></span><br><span class="line">scala&gt; textFile.count()</span><br><span class="line">res0: <span class="type">Long</span> = <span class="number">108</span>                                                                </span><br><span class="line"></span><br><span class="line">scala&gt; textFile.first</span><br><span class="line">res1: <span class="type">String</span> = # <span class="type">Apache</span> <span class="type">Spark</span></span><br></pre></td></tr></table></figure>
-<h3 id="从Dataset中进行转化得到新的内容"><a class="header-anchor" href="#从Dataset中进行转化得到新的内容">¶</a>从Dataset中进行转化得到新的内容</h3>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 过滤得到包含“Spark”的行</span></span><br><span class="line">scala&gt; textFile.filter(line =&gt; line.contains(<span class="string">&quot;Spark&quot;</span>)).count</span><br><span class="line">res3: <span class="type">Long</span> = <span class="number">19</span></span><br></pre></td></tr></table></figure>
-<h3 id="常用API"><a class="header-anchor" href="#常用API">¶</a>常用API</h3>
-<h4 id="常用的transformation"><a class="header-anchor" href="#常用的transformation">¶</a>常用的<code>transformation</code></h4>
-<table>
+<h3 id="直接从Datasets中获取"><a href="#直接从Datasets中获取" class="headerlink" title="直接从Datasets中获取"></a>直接从Datasets中获取</h3><figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> textFile = spark.read.textFile(<span class="string">&quot;README.md&quot;</span>)</span><br><span class="line">textFile: org.apache.spark.sql.<span class="type">Dataset</span>[<span class="type">String</span>] = [value: string]</span><br><span class="line"></span><br><span class="line">scala&gt; textFile.count()</span><br><span class="line">res0: <span class="type">Long</span> = <span class="number">108</span>                                                                </span><br><span class="line"></span><br><span class="line">scala&gt; textFile.first</span><br><span class="line">res1: <span class="type">String</span> = # <span class="type">Apache</span> <span class="type">Spark</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="从Dataset中进行转化得到新的内容"><a href="#从Dataset中进行转化得到新的内容" class="headerlink" title="从Dataset中进行转化得到新的内容"></a>从Dataset中进行转化得到新的内容</h3><figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 过滤得到包含“Spark”的行</span></span><br><span class="line">scala&gt; textFile.filter(line =&gt; line.contains(<span class="string">&quot;Spark&quot;</span>)).count</span><br><span class="line">res3: <span class="type">Long</span> = <span class="number">19</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="常用API"><a href="#常用API" class="headerlink" title="常用API"></a>常用API</h3><h4 id="常用的transformation"><a href="#常用的transformation" class="headerlink" title="常用的transformation"></a>常用的<code>transformation</code></h4><table>
 <thead>
 <tr>
 <th>方法</th>
@@ -151,8 +250,7 @@
 <th>示例</th>
 </tr>
 </thead>
-<tbody>
-<tr>
+<tbody><tr>
 <td><code>map</code></td>
 <td>将Dataset中的每个元素传入自定义函数，获取一个新的元素，然后新的元素组成新的Dataset</td>
 <td></td>
@@ -192,10 +290,8 @@
 <td>同join，但是每个key对应的<code>Iterable&lt;value&gt;</code>会传入自定义函数进行处理</td>
 <td></td>
 </tr>
-</tbody>
-</table>
-<h4 id="常用action"><a class="header-anchor" href="#常用action">¶</a>常用<code>action</code></h4>
-<table>
+</tbody></table>
+<h4 id="常用action"><a href="#常用action" class="headerlink" title="常用action"></a>常用<code>action</code></h4><table>
 <thead>
 <tr>
 <th>方法</th>
@@ -203,8 +299,7 @@
 <th>示例</th>
 </tr>
 </thead>
-<tbody>
-<tr>
+<tbody><tr>
 <td><code>reduce</code></td>
 <td>将Dataset中的所有元素进行聚合操作</td>
 <td></td>
@@ -239,14 +334,12 @@
 <td>遍历Dataset</td>
 <td></td>
 </tr>
-</tbody>
-</table>
+</tbody></table>
 <p>基于上面这些API，Spark很容易就实现了Hadoop中的<code>Map-Reduce</code></p>
-<h3 id="Cache"><a class="header-anchor" href="#Cache">¶</a>Cache</h3>
-<p>Spark还支持在内存中缓存Datasets。在查询一小部分“热点数据”的情境中有了很大的性能提升(类似于“网页排名”)</p>
+<h3 id="Cache"><a href="#Cache" class="headerlink" title="Cache"></a>Cache</h3><p>Spark还支持在内存中缓存Datasets。在查询一小部分“热点数据”的情境中有了很大的性能提升(类似于“网页排名”)</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; (变量名) cache</span><br></pre></td></tr></table></figure>
-<h2 id="Idea-sbt-scala远程调式spark"><a class="header-anchor" href="#Idea-sbt-scala远程调式spark">¶</a>Idea+sbt+scala远程调式spark</h2>
-<p>windows的编程体验是相当恶劣的，如果平时还需要使用window做一些事(玩游戏)，又没有买第二台电脑的打算的话，可以选择租一台服务器(选择虚拟机也可)，并采用远程调试的来解决这一矛盾。现代智能IDE基本上都具备了远程开发的能力</p>
+
+<h2 id="Idea-sbt-scala远程调式spark"><a href="#Idea-sbt-scala远程调式spark" class="headerlink" title="Idea+sbt+scala远程调式spark"></a>Idea+sbt+scala远程调式spark</h2><p>windows的编程体验是相当恶劣的，如果平时还需要使用window做一些事(玩游戏)，又没有买第二台电脑的打算的话，可以选择租一台服务器(选择虚拟机也可)，并采用远程调试的来解决这一矛盾。现代智能IDE基本上都具备了远程开发的能力</p>
 <p><strong>编译环境</strong>：</p>
 <ul>
 <li>centOS 7.6</li>
@@ -257,19 +350,19 @@
 <p>Idea安装配置sbt和spark(windows环境配置)：<a href="https://bbs.huaweicloud.com/blogs/193395">https://bbs.huaweicloud.com/blogs/193395</a></p>
 <p>远程服务器配置spark编译环境(使用SBT)：<a href="https://docs.scala-lang.org/getting-started/sbt-track/getting-started-with-scala-and-sbt-on-the-command-line.html">https://docs.scala-lang.org/getting-started/sbt-track/getting-started-with-scala-and-sbt-on-the-command-line.html</a></p>
 <p>IDEA远程上传以及远程集群调试(windows环境打包上传，或者Linux中编译直接打包两种方式)：<a href="https://blog.csdn.net/wgh1015398431/article/details/103047210">https://blog.csdn.net/wgh1015398431/article/details/103047210</a></p>
-<h2 id="测试"><a class="header-anchor" href="#测试">¶</a>测试</h2>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> quick_start</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.<span class="type">SparkSession</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">SimpleApp</span> </span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">def</span> <span class="title">main</span></span>(args: <span class="type">Array</span>[<span class="type">String</span>]): <span class="type">Unit</span> = &#123;</span><br><span class="line">		<span class="keyword">val</span> logFile = <span class="string">&quot;&#123;YOUR_SPARK_HOME&#125;/README.md&quot;</span></span><br><span class="line">		<span class="keyword">val</span> spark = <span class="type">SparkSession</span>.builder.appName(<span class="string">&quot;Simple application&quot;</span>).getOrCreate()</span><br><span class="line">		<span class="keyword">val</span> logData = spark.read.textFile(logFile).cache()</span><br><span class="line">		<span class="keyword">val</span> numAs = logData.filter(_.contains(<span class="string">&quot;a&quot;</span>)).count()</span><br><span class="line">		<span class="keyword">val</span> numBs = logData.filter(_.contains(<span class="string">&quot;b&quot;</span>)).count()</span><br><span class="line">		println(<span class="string">s&quot;Line with a: <span class="subst">$numAs</span>, Lines with b: <span class="subst">$numBs</span>&quot;</span>)</span><br><span class="line">		spark.stop()</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="测试"><a href="#测试" class="headerlink" title="测试"></a>测试</h2><figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> quick_start</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.<span class="type">SparkSession</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">SimpleApp</span> </span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">def</span> <span class="title">main</span></span>(args: <span class="type">Array</span>[<span class="type">String</span>]): <span class="type">Unit</span> = &#123;</span><br><span class="line">		<span class="keyword">val</span> logFile = <span class="string">&quot;&#123;YOUR_SPARK_HOME&#125;/README.md&quot;</span></span><br><span class="line">		<span class="keyword">val</span> spark = <span class="type">SparkSession</span>.builder.appName(<span class="string">&quot;Simple application&quot;</span>).getOrCreate()</span><br><span class="line">		<span class="keyword">val</span> logData = spark.read.textFile(logFile).cache()</span><br><span class="line">		<span class="keyword">val</span> numAs = logData.filter(_.contains(<span class="string">&quot;a&quot;</span>)).count()</span><br><span class="line">		<span class="keyword">val</span> numBs = logData.filter(_.contains(<span class="string">&quot;b&quot;</span>)).count()</span><br><span class="line">		println(<span class="string">s&quot;Line with a: <span class="subst">$numAs</span>, Lines with b: <span class="subst">$numBs</span>&quot;</span>)</span><br><span class="line">		spark.stop()</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
 <p>注意使用<code>main()</code>而不是继承<code>scala.App</code>的方式运行。<code>App</code>子类可能会导致运行失败</p>
 <p>这个程序是用来记录Spark README.md文件中包含<code>a</code>和<code>b</code>的行数。不像前面有着独立的<code>SparkSession</code>的SparkShell，我们在这里需要初始化一个<code>SparkSession</code>。</p>
 <p>上面的SparkSession需要导入依赖包，因此我们需要在其依赖包中加入如下配置</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scalaVersion := <span class="string">&quot;2.12.10&quot;</span></span><br><span class="line">name := <span class="string">&quot;spark-start&quot;</span></span><br><span class="line">organization := <span class="string">&quot;ch.epfl.scala&quot;</span></span><br><span class="line">version := <span class="string">&quot;1.0&quot;</span></span><br><span class="line"></span><br><span class="line">libraryDependencies += <span class="string">&quot;org.scala-lang.modules&quot;</span> %% <span class="string">&quot;scala-parser-combinators&quot;</span> % <span class="string">&quot;1.1.2&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// https://mvnrepository.com/artifact/org.apache.spark/spark-core</span></span><br><span class="line">libraryDependencies += <span class="string">&quot;org.apache.spark&quot;</span> %% <span class="string">&quot;spark-core&quot;</span> % <span class="string">&quot;3.1.1&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// https://mvnrepository.com/artifact/org.apache.spark/spark-sql</span></span><br><span class="line">libraryDependencies += <span class="string">&quot;org.apache.spark&quot;</span> %% <span class="string">&quot;spark-sql&quot;</span> % <span class="string">&quot;3.1.1&quot;</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
 <p>这样第一个Spark应用就搭建起来了，接下来就打包部署就ok了。笔者提一下Linux部署过程(使用sbt)</p>
 <ol>
 <li>在Linux项目部署的目录下运行<code>sbt new scala/hello-world.g8</code>指令。这个指令会从Github上面拉取一个叫做<code>hello-world</code>的模板。他会在子目录下创建<code>project</code>，<code>src</code>，<code>target</code>文件夹。将IDEA项目对应的<code>project</code>，<code>src</code>映射到对应的位置，<code>target</code>不必在意</li>
 <li>在<code>build.sbt</code>中添加依赖，在<code>src/main/scala</code>文件中写代码</li>
 <li>通过<code>sbt package</code>指令编译打包</li>
-<li><code>spark-submit --class “&#123;YOUR_MAIN_CLASS&#125; &#123;jar包&#125;”</code>
-例如我的就是<code>$ spark-submit --class &quot;quick_start.SimpleApp&quot; /root/study/spark/spark-start/target/scala-2.12/spark-start_2.12-1.0.jar</code></li>
+<li><code>spark-submit --class “&#123;YOUR_MAIN_CLASS&#125; &#123;jar包&#125;”</code><br>例如我的就是<code>$ spark-submit --class &quot;quick_start.SimpleApp&quot; /root/study/spark/spark-start/target/scala-2.12/spark-start_2.12-1.0.jar</code></li>
 </ol>
 <blockquote>
 <p>更多sbt用法参见：</p>
@@ -277,10 +370,8 @@
 <p>中文文档：<a href="https://www.scala-sbt.org/1.x/docs/zh-cn/Getting-Started.html">https://www.scala-sbt.org/1.x/docs/zh-cn/Getting-Started.html</a></p>
 </blockquote>
 <p>当然也可以在本地打包上传，也就是在本地的终端运行sbt命令，然后将包上传运行。笔者比较倾向在Linux环境中打包运行的方式</p>
-<h3 id="运行结果"><a class="header-anchor" href="#运行结果">¶</a>运行结果</h3>
-<p><img src="https://gitee.com/yovette/Images/raw/master/img/20210412192824.png" alt="image-20210412192810195"></p>
-<h2 id="相关文档即博客"><a class="header-anchor" href="#相关文档即博客">¶</a>相关文档即博客</h2>
-<ul>
+<h3 id="运行结果"><a href="#运行结果" class="headerlink" title="运行结果"></a>运行结果</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20210412192824.png" alt="image-20210412192810195"></p>
+<h2 id="相关文档即博客"><a href="#相关文档即博客" class="headerlink" title="相关文档即博客"></a>相关文档即博客</h2><ul>
 <li>Spark官方文档：<a href="https://spark.apache.org/docs/latest/quick-start.html">https://spark.apache.org/docs/latest/quick-start.html</a></li>
 <li>sbt官方文档：<a href="https://www.scala-sbt.org/1.x/docs/">https://www.scala-sbt.org/1.x/docs/</a></li>
 <li>使用sbt搭建Scala编译环境(不需要自己动手配置Scala)：<a href="https://docs.scala-lang.org/getting-started/sbt-track/getting-started-with-scala-and-sbt-on-the-command-line.html">https://docs.scala-lang.org/getting-started/sbt-track/getting-started-with-scala-and-sbt-on-the-command-line.html</a></li>
@@ -298,201 +389,14 @@
       </tags>
   </entry>
   <entry>
-    <title>Spark#3 RDD编程(下)</title>
-    <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/RDD%E7%BC%96%E7%A8%8B%E4%B8%8B/</url>
-    <content><![CDATA[<h1>RDD操作</h1>
-<p>本文主要讲解RDD的相关操作</p>
-<span id="more"></span>
-<h2 id="键值对操作"><a class="header-anchor" href="#键值对操作">¶</a>键值对操作</h2>
-<p>虽然大多数的Spark操作可以在包含任何类型的RDD上运行，但有一些特殊操作仅在键值对的RDD上可用。最常见的是<code>shuffle</code>操作，例如根据键对元素进行分组和聚合。</p>
-<p>在Scala中，这些操作可以顺其自然的在包含<code>Tuple2</code>对象的RDD上操作</p>
-<blockquote>
-<p>这个Tuple2是只包含两个元素的Tuple对象。可以简单的理解成C++中的pair。</p>
-</blockquote>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> lines = sc.textFile(<span class="string">&quot;data.txt&quot;</span>)</span><br><span class="line"><span class="keyword">val</span> pairs = lines.map(s =&gt; (s, <span class="number">1</span>))</span><br><span class="line"><span class="keyword">val</span> counts = pairs.reduceByKey((a, b) =&gt; a + b)</span><br></pre></td></tr></table></figure>
-<h2 id="Transformations操作"><a class="header-anchor" href="#Transformations操作">¶</a>Transformations操作</h2>
-<h2 id="Actions操作"><a class="header-anchor" href="#Actions操作">¶</a>Actions操作</h2>
-<blockquote>
-<p>上面两个操作前文多次提及这里不再赘述</p>
-<p>值得一提的是，Spark RDD API还公开了一些操作的异步版本。它们会立刻返回给调用者而不是在操作完成之后阻塞</p>
-</blockquote>
-<h2 id="Shuffle操作-洗牌"><a class="header-anchor" href="#Shuffle操作-洗牌">¶</a>Shuffle操作(洗牌)</h2>
-<p>Spark某些操作会触发一个叫做shuffle(洗牌)的事件。shuffle是Spark中在分区之间进行分组的一种机制</p>
-<p>由于这些操作常常涉及到执行器和机器之间的数据拷贝，shuffle操作是复杂且费时的</p>
-<p>为了理解shuffle发生了些什么，我们以<code>reduceByKey</code>为例子进行考虑。<code>reduceByKey</code>操作会产生一个新的RDD——由同一种key而被合并到同一个元组的value集合。并非单个键的所有值都在同一分区，同一机器，但必须将它们放在同一位置以计算结果</p>
-<p>在Spark中，为了一些特定的操作，数据通常不会跨分区分布，而是在一些特定的位置。在计算时，一个任务只会操作一个分区。因此，要组织单个<code>reduceByKey</code>任务要执行的所有数据，Spark需要进行一个<code>all to all</code>操作。需要读取所有key的所有value，然后将所有分区的值集合起来计算每个键的最终结果，这个操作就是<code>shuffle</code>。</p>
-<p>尽管shuffled产生的各个分区中的元素集合是确定的，然而分区之间、分区内的元素之间的顺序并不是确定的。如果希望能够得到确定的顺序，可以像下面这样用</p>
-<ul>
-<li><code>mapPartitions</code>来进行对分区进行排序</li>
-<li><code>repartitionAndSortWithinPartitions</code>在重新分区的同时有效地进行分区内部地排序</li>
-<li><code>sortBy</code>使RDD全局有序</li>
-</ul>
-<p>能够导致shuffle操作的有<code>repartition</code>和<code>coalesce</code>形成的<code>repartition</code>，<code>groupByKey</code>和<code>reduceByKey</code>形成的<code>ByKey</code>操作，以及<code>cogroup</code>和<code>join</code>这样的<code>join</code>操作</p>
-<h3 id="性能影响"><a class="header-anchor" href="#性能影响">¶</a>性能影响</h3>
-<p>由于涉及到磁盘IO和网络IO，Shuffle的开销是非常大的。为了处理Shuffle中的数据，Spark生成一组任务——map任务来处理数据，并且又采用一组reduce任务来统计它们。这个术语来自<code>MapReduce</code>，和Spark自己的<code>map</code>和<code>reduce</code>操作没什么关系</p>
-<p>在内部，若非内存空间不足，每个map中的结果会一直保存到内存中。然后将对分区里面的数据进行排序并写入文件当中。在<code>reduce</code>阶段，将会读取这些已经排序好的块。因为shuffle阶段是在内存中对数据进行记录，因此其操作会占用大量的内存空间。特别的，<code>reduceBByKey</code>和<code>aggregateByKey</code>是在map阶段创建内存中的数据结构，<code>ByKey</code>会在reduce阶段创建数据结构。<strong>当内存中无法存放数据时，Spark将会将数据溢出到磁盘中。故会产生一些额外的磁盘IO以及垃圾收集的开销。</strong></p>
-<p><strong>Shuffle也会在磁盘上产生大量的中间文件</strong>。在Spark1.3中，这些文件会一直存在直到对应的RDD不再使用而被垃圾收集。如果程序一直保留着RDDs的引用或者GC频率很低，可能会让垃圾收集很久之后才会发生。这也就意味着，一个Spark程序运行一段时间之后，会占用大量的磁盘空间。</p>
-<blockquote>
-<p>临时存储目录在配置Spark Context时由<code>spark.local.dir</code>参数指定。</p>
-<p>Shuffle行为也可以通过配置参数来进行调整。</p>
-</blockquote>
-<h2 id="RDD持久化"><a class="header-anchor" href="#RDD持久化">¶</a>RDD持久化</h2>
-<p>相比于Hadoop，Spark可以让操作之间的数据集持久化存储。当持久化了一个RDD时，每个节点将会存储所有的分区的计算结果，并在其他对这个数据集的actions操作时重用这些数据。缓存是用于迭代算法和快速交互的关键工具</p>
-<p><strong>用户可以使用<code>persist()</code>或者<code>cache()</code>方法标记一个RDD</strong>，让其在内存中缓存。当其第一次在action操作中计算时，会被保留在内存中。Spark’s cache是容错的——如果RDD中的一个分区丢失了，就会自动从创建它的<code>transformation</code>操作中重新计算</p>
-<p>除此之外，<strong>被缓存的RDD有不同的存储级别</strong>。允许用户控制存储，例如存储在磁盘、存储在内存、复制到其他节点上。这些级别可以通过传递<code>StorageLevel</code>对象给<code>persist()</code>方法来控制。<code>cache</code>方法只有默认级别(<code>StorageLevel.MEMORY_ONLY</code>， 在内存中存储序列化对象)的存储级别。</p>
-<p>完整的存储级别如下：</p>
-<table>
-<thead>
-<tr>
-<th>存储级别</th>
-<th>描述</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>MEMORY_ONLY</code></td>
-<td>将RDD以反序列化的Java对象存入JVM中，如果内存中存储空间不够，一些分区将无法存储只能在它们被调用的时候重新计算，这是默认的存储级别</td>
-</tr>
-<tr>
-<td><code>MEMORY_AND_DISK</code></td>
-<td>将RDD以反序列化的Java对象存入JVM中，如果内存不足，将其存入磁盘，并在需要时从磁盘调用</td>
-</tr>
-<tr>
-<td><code>MEMORY_ONLY_SER</code></td>
-<td>将RDD以序列化的Java对象的方式存储(每个分区存储一个字节数组)。相比于反序列的方式，这往往能够有效地利用空间，不过在读取时，CPU负担更重</td>
-</tr>
-<tr>
-<td><code>MEMORY_AND_DISK_SER</code></td>
-<td>和上面类似。不过是将内存存储不下的分区溢出到磁盘，而不是每次需要时重新计算</td>
-</tr>
-<tr>
-<td><code>DISK_ONLY</code></td>
-<td>只在磁盘内存储RDD</td>
-</tr>
-<tr>
-<td><code>MEMORY_ONLY_2</code><br /><code>MEMORY_AND_DISK_2</code><br /><code>etc</code></td>
-<td>和上面的类似，不过会在两个集群节点中复制所有的分区</td>
-</tr>
-<tr>
-<td><code>OFF_HEAD(experimental)</code></td>
-<td>与<code>MEMORY_ONLY_SER</code>类似，但是将数据存储在堆外存储器中。这需要开启堆外内存</td>
-</tr>
-</tbody>
-</table>
-<blockquote>
-<p><strong>注意</strong>：在Python中，存储对象始终使用<code>Pickle</code>库进行序列化，因此它不在意是否选择序列化的方式。</p>
-</blockquote>
-<p>Spark默认缓存Shuffle操作的中间结果(即便用户没有调用persist方法)。这是为了防止在Shuffle阶段节点故障，而导致重新计算输入。</p>
-<h3 id="如何选择存储级别"><a class="header-anchor" href="#如何选择存储级别">¶</a>如何选择存储级别</h3>
-<p>Spark存储级别的不同意味着内存空间和CPU性能之间的权衡。我们一般基于下面的步骤考虑来选择使用哪一个存储级别：</p>
-<ul>
-<li>如果由足够的空间存储RDD，就使用<code>MEMORY_ONLY</code>的存储级别。这是最有效利用CPU的选择</li>
-<li>如果没有足够的空间，尝试用<code>MEMORY_ONLY_SER</code>的隔离级别，并选择一个速度够快的序列化库，对于Java或者Scala来说是一种非常合适的途径</li>
-<li>除非计算数据集的代价非常高或者数据太多，否则不要将数据溢出到磁盘。重新计算可能比从磁盘中读取的速度更快</li>
-<li>如果希望集群容错性更强可以选择将数据复制到多个节点。用户可以从其他节点中得到数据，而不是重新计算</li>
-</ul>
-<h3 id="溢出数据"><a class="header-anchor" href="#溢出数据">¶</a>溢出数据</h3>
-<p>Spark监控缓存，并使用LRU策略将久的数据分区移出。如果希望手动移出RDD，可以使用<code>RDD.unpersist</code>方法。注意这个方法默认不阻塞。如果要阻塞直到资源被释放，在调用方法时设置<code>blocking=true</code></p>
-<h2 id="Shared-Variables共享变量"><a class="header-anchor" href="#Shared-Variables共享变量">¶</a>Shared Variables共享变量</h2>
-<p>通常来说，当一个方法传递给Spark集群的远程节点中执行时(类似map或者reduce方法)。它会在这个函数使用的所有变量的副本上面执行。这些变量复制到每一台机器中，并且远程工作的机器不会将更改过的变量带给驱动程序。跨任务支持通用的读写共享变量将是低效的。不过Spark提供了两种有效的共享变量：<code>broadcast Variables</code>和<code>accumulators</code></p>
-<h3 id="Broadcast-Variables广播变量"><a class="header-anchor" href="#Broadcast-Variables广播变量">¶</a>Broadcast Variables广播变量</h3>
-<p>广播变量允许程序在每一台机器中缓存一个只读的共享变量。使用其可以为每个节点提供一个大型输入数据集的副本。Spark还尝试使用高效广播算法分发广播变量，以降低通信成本。</p>
-<p>Spark Action在一组由Shuffle操作分割出的阶段执行。Spark自动每个阶段中间，广播任务需要的常见的数据。这些数据以序列化缓存在内存中，并在任务执行前反序列化。这也意味着这些广播变量只有在各个阶段任务需要相同的变量或者反向形式中缓存数据时有用。</p>
-<p>广播变量通过调用<code>SparkContext.broadcast</code>方法创建。通过调用广播变量的<code>value</code>方法可以获取值</p>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> broadcastVar = sc.broadcast(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>))</span><br><span class="line">broadcastVar: org.apache.spark.broadcast.<span class="type">Broadcast</span>[<span class="type">Array</span>[<span class="type">Int</span>]] = <span class="type">Broadcast</span>(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; broadcastVar.value</span><br><span class="line">res0: <span class="type">Array</span>[<span class="type">Int</span>] = <span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>)</span><br></pre></td></tr></table></figure>
-<p>为了保证每个节点获取的广播变量是一致的，广播对象一旦创建不能修改。如果想要释放变量占用的资源——调用<code>unpersist</code>方法。如果广播之后被再次使用，它将重新广播。如果想要永久的删除变量，调用<code>destroy</code>方法。这些方法默认都是不会阻塞的，可以在调用方法时传入<code>blocking=true</code>，来阻塞资源。</p>
-<h3 id="Accumulators累加器"><a class="header-anchor" href="#Accumulators累加器">¶</a>Accumulators累加器</h3>
-<p>累加器时只能进行加法的一种变量。可以用作计数器或者是求和。</p>
-<p>用户可以通过<code>SparkContext.longAccumulator</code>或者<code>SparkContext.doubleAccumulator</code>创建一个Long或者Double类型的累加器。任务可以对这个累加器进行加法操作。然而，它们是不能读取这个累加器的值的。只有驱动程序才能使用<code>value</code>方法得到值。</p>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> accum = sc.longAccumulator(<span class="string">&quot;My Accumulator&quot;</span>)</span><br><span class="line">scala&gt; sc.parallelize(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>)).foreach(x =&gt; accum.add(x))</span><br><span class="line">scala&gt; accum.value</span><br><span class="line">res2: <span class="type">Long</span> = <span class="number">10</span></span><br></pre></td></tr></table></figure>
-]]></content>
-      <categories>
-        <category>大数据</category>
-        <category>Spark</category>
-        <category>Spark Core</category>
-      </categories>
-      <tags>
-        <tag>Spark</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Spark#4 Spark SQL概述</title>
-    <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/SparkSQL/Spark%20SQL/</url>
-    <content><![CDATA[<h1>Spark SQL概述</h1>
-<p>Spark SQL是用于结构化数据处理的Spark模块。与Spark RDD API不同，Spark SQL提供的接口可以为Spark提供更多的数据及其计算时的结构信息。Spark使用这些额外的信息实现一些优化。用户可以使用SQL或者Dataset API对SparkSQL进行操作。由于它和用户使用的API或者开发语言无关，这意味着开发人员可以在多个API中轻松地切换</p>
-<span id="more"></span>
-<h2 id="SQL"><a class="header-anchor" href="#SQL">¶</a>SQL</h2>
-<p>SparkSQL可以用来执行SQL查询，从一个Hive实例中查询数据。可以从<a href="https://spark.apache.org/docs/latest/sql-data-sources-hive-tables.html">Hive Tables - Spark 3.1.1 Documentation (apache.org)</a>中了解更多的配置。</p>
-<p>当使用另外一种编程语言中运行SQL时，结果将作为<code>Dataset/DataFrame</code>返回。也能使用命令行或者JDBC对SQL进行操作</p>
-<h2 id="Datasets和DataFrames"><a class="header-anchor" href="#Datasets和DataFrames">¶</a>Datasets和DataFrames</h2>
-<p>dataset是分布式的数据集。Dataset在Spark1.6之后加入，结合了RDD的优点(强类型，lambda函数的能力)，和Spark SQL的优化执行引擎的优点。数据集能从JVM对象中创建，并使用<code>transformation</code>对其进行操作。python暂不支持Dataset API。但是由于python的动态特性，Dataset API的很多优点实际在python中可以体现。</p>
-<p>DataFrame是按列为名称构造的Dataset。它在概念上等价于关系型数据库或者R/Python中的视图，不过在引擎层面有着更加丰富的优化。DataFrame可以从各种各样的数据源中构建，例如：结构数据文件，Hive表，第三方数据库，或者是一个存在的RDD。DataDrameAPI可以供Scala、Java、Python、R使用。在Java或者Scala中，DataFrame是由Rows的Dataset来表示</p>
-<h1>起步</h1>
-<h2 id="SparkSession"><a class="header-anchor" href="#SparkSession">¶</a>SparkSession</h2>
-<p>Spark中所有功能的入口都是<code>SparkSession</code>类。我们使用<code>SparkSession.builder()</code>创建一个基础的SparkSession</p>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">import</span> org.apache.spark.sql.<span class="type">SparkSession</span></span><br><span class="line"></span><br><span class="line">scala&gt; <span class="keyword">val</span> spark = <span class="type">SparkSession</span>.</span><br><span class="line">     | builder().</span><br><span class="line">     | appName(<span class="string">&quot;Spark SQL basic example&quot;</span>).</span><br><span class="line">     | config(<span class="string">&quot;spark.some.config.option&quot;</span>, <span class="string">&quot;some-value&quot;</span>).</span><br><span class="line">     | getOrCreate</span><br><span class="line"></span><br></pre></td></tr></table></figure>
-<p>SparkSession是Spark2.0开始为Hive特性提供的内部支持，包括使用HiveQL进行查询，访问Hive UDFs以及读取Hive table的数据。</p>
-<h2 id="创建DataFrame"><a class="header-anchor" href="#创建DataFrame">¶</a>创建DataFrame</h2>
-<p>当Spark Session创建完成之后，我们就能使用RDD、Hive table或者是其他Spark数据源来创建一个DataFrame。</p>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> df = spark.read.json(<span class="string">&quot;examples/src/main/resources/people.json&quot;</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; df.show</span><br></pre></td></tr></table></figure>
-<figure class="highlight json"><table><tr><td class="code"><pre><span class="line"><span class="comment">// people.json</span></span><br><span class="line">&#123;<span class="attr">&quot;name&quot;</span>:<span class="string">&quot;Michael&quot;</span>&#125;</span><br><span class="line">&#123;&quot;name&quot;:&quot;Andy&quot;, &quot;age&quot;:30&#125;,</span><br><span class="line">&#123;<span class="attr">&quot;name&quot;</span>:<span class="string">&quot;Justin&quot;</span>, <span class="attr">&quot;age&quot;</span>:<span class="number">19</span>&#125;</span><br></pre></td></tr></table></figure>
-<h2 id="Untyped-Dataset操作-又名DataFrame操作"><a class="header-anchor" href="#Untyped-Dataset操作-又名DataFrame操作">¶</a>Untyped Dataset操作(又名DataFrame操作)</h2>
-<p>如上文所述，DataFrame是Java和Scala API中Rows类型的Dataset。和Java/Scala中的强类型Dataset不同，这些操作以一种无类型transformation的形式引用。</p>
-<p>这里举出了一些使用Dataset的结构化数据的例子：</p>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> spark.implicits._</span><br><span class="line"></span><br><span class="line"><span class="comment">// 以树形的格式打印视图(元数据)</span></span><br><span class="line">df.printScheme()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 选择名称为&quot;name&quot;的一列</span></span><br><span class="line">df.select(<span class="string">&quot;name&quot;</span>).show()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 选择&quot;name&quot;,和&quot;age&quot;，并将age的数值加一</span></span><br><span class="line">df.select($<span class="string">&quot;name&quot;</span>, $<span class="string">&quot;age&quot;</span> + <span class="number">1</span>).show()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 选择age &gt; 21的成员</span></span><br><span class="line">df.filter($<span class="string">&quot;age&quot;</span> &gt; <span class="number">21</span>).show()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 以年龄为分组</span></span><br><span class="line">df.groupBy(<span class="string">&quot;age&quot;</span>).count().show()</span><br></pre></td></tr></table></figure>
-<blockquote>
-<p>完整的操作见<a href="https://spark.apache.org/docs/latest/api/scala/org/apache/spark/sql/Dataset.html">API Documentation</a></p>
-<p>除了简单的列引用和表达式，Dataset还提供了丰富的类库，包括：字符串操作，日期算术，常见的数学运算等等。参考<a href="https://spark.apache.org/docs/latest/api/scala/org/apache/spark/sql/functions$.html">DataFrame Function Reference</a></p>
-</blockquote>
-<h2 id="SQL编程"><a class="header-anchor" href="#SQL编程">¶</a>SQL编程</h2>
-<p>Spark的<code>sql</code>函数能够让SQL以编程形式运行并将一个DataFrame作为结果返回</p>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">df.createOrReplaceTempView(<span class="string">&quot;people&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> sqlDF = spark.sql(<span class="string">&quot;SELECT * FROM people&quot;</span>)</span><br><span class="line">sqlDF.show</span><br></pre></td></tr></table></figure>
-<h2 id="全局临时视图"><a class="header-anchor" href="#全局临时视图">¶</a>全局临时视图</h2>
-<p>Spark SQL的临时视图作用域是会话域，如果创建视图的会话终止，那么视图也会消失。如果希望能够在所有会话中共享一个临时视图，并让其保持活动状态直到Spark应用程序终止，我们可以使用<code>global temporary view</code>。全局临时视图域系统保留的数据库<code>global_temp</code>绑定。我们需要使用正确的名称创建它，如<code>SELECT * FROM global_temp.view1</code></p>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 注册一个全局临时视图</span></span><br><span class="line">df.createGlobalTempView(<span class="string">&quot;people&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 全局临时视图与global_temp关联</span></span><br><span class="line">spark.sql(<span class="string">&quot;SELECT * FROM global_temp.people&quot;</span>).show()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 全局临时视图的作用域</span></span><br><span class="line">spark.newSession().sql(<span class="string">&quot;SELECT * FROM global_temp.people&quot;</span>)</span><br></pre></td></tr></table></figure>
-<h2 id="创建Datasets"><a class="header-anchor" href="#创建Datasets">¶</a>创建Datasets</h2>
-<p>Datasets类似于RDDs，不过没有使用Java serialization或者Kryo，而是使用专门的编码器来序列化对象，以便在网络进行处理或传输。</p>
-<p>编码器和标准序列化都能将一个对象转化成一个字符数组，但是编码器是动态生成的，而且不需要进行阶码就可以支持Spark的很多操作，例如<code>filtering</code>，<code>sorting</code>，<code>hashing</code></p>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">Person</span>(<span class="params">name: <span class="type">String</span>, age: <span class="type">Long</span></span>)</span></span><br><span class="line"><span class="class"><span class="comment">// 为case class创建编码器</span></span></span><br><span class="line"><span class="class"><span class="title">val</span> <span class="title">caseClassDs</span> </span>= <span class="type">Seq</span>(<span class="type">Person</span>(<span class="string">&quot;Any&quot;</span>, <span class="number">32</span>)).toDS()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 大多数常见类型的编码器是由`spark.implicits._`库自动导入</span></span><br><span class="line"><span class="keyword">val</span> primitiveDS = <span class="type">Seq</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>).toDS()</span><br><span class="line">primitiveDS.map(_ + <span class="number">1</span>).collect()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 通过传递一个类，可以将DataFrames转换成Dataset。映射根据名称进行</span></span><br><span class="line"><span class="keyword">val</span> path = <span class="string">&quot;src/main/resources/people.json&quot;</span></span><br><span class="line"><span class="keyword">val</span> peopleDS = spark.read.json(path).as[<span class="type">Person</span>]</span><br><span class="line">peopleDS.show()</span><br></pre></td></tr></table></figure>
-<h2 id="RDD互操作"><a class="header-anchor" href="#RDD互操作">¶</a>RDD互操作</h2>
-<p>Spark SQL支持两种不同的方法，将现有RDD转换为数据集。第一个方法是通过反射来推断RDD的schema。基于反射的方式在你了解Spark应用程序的所有schema时，可以让程序变得更加简洁。</p>
-<p>第二种方式是允许用户通过一个动态接口创建一个schema并将其应用到一个现有的RDD中。这种方式更加啰嗦，但是它允许你在程序不知道列名或者类型的情况下创建datasets</p>
-<h3 id="使用反射进行推断"><a class="header-anchor" href="#使用反射进行推断">¶</a>使用反射进行推断</h3>
-<p>如前文所述，Spark SQL的Scala接口支持将包含<code>case class</code>的RDD转换成DataFrame。这个case class定义了表的视图。case class参数的名称被映射为列名称。case class也是能够嵌套的，它可以包含复杂类型例如<code>Seqs</code>和<code>Arrays</code>。这个RDD能够也能隐式转换成DataFrame，然后注册成一个表。</p>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> spark.implicits._</span><br><span class="line"></span><br><span class="line"><span class="comment">// Create an RDD of Person objects from a text file, convert it to a Dataframe</span></span><br><span class="line"><span class="keyword">val</span> peopleDF = spark.sparkContext</span><br><span class="line">  .textFile(<span class="string">&quot;examples/src/main/resources/people.txt&quot;</span>)</span><br><span class="line">  .map(_.split(<span class="string">&quot;,&quot;</span>))</span><br><span class="line">  .map(attributes =&gt; <span class="type">Person</span>(attributes(<span class="number">0</span>), attributes(<span class="number">1</span>).trim.toInt))</span><br><span class="line">  .toDF()</span><br><span class="line"><span class="comment">// Register the DataFrame as a temporary view</span></span><br><span class="line">peopleDF.createOrReplaceTempView(<span class="string">&quot;people&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// SQL statements can be run by using the sql methods provided by Spark</span></span><br><span class="line"><span class="keyword">val</span> teenagersDF = spark.sql(<span class="string">&quot;SELECT name, age FROM people WHERE age BETWEEN 13 AND 19&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// The columns of a row in the result can be accessed by field index</span></span><br><span class="line">teenagersDF.map(teenager =&gt; <span class="string">&quot;Name: &quot;</span> + teenager(<span class="number">0</span>)).show()</span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"><span class="comment">// |       value|</span></span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"><span class="comment">// |Name: Justin|</span></span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// or by field name</span></span><br><span class="line">teenagersDF.map(teenager =&gt; <span class="string">&quot;Name: &quot;</span> + teenager.getAs[<span class="type">String</span>](<span class="string">&quot;name&quot;</span>)).show()</span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"><span class="comment">// |       value|</span></span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"><span class="comment">// |Name: Justin|</span></span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// No pre-defined encoders for Dataset[Map[K,V]], define explicitly</span></span><br><span class="line"><span class="keyword">implicit</span> <span class="keyword">val</span> mapEncoder = org.apache.spark.sql.<span class="type">Encoders</span>.kryo[<span class="type">Map</span>[<span class="type">String</span>, <span class="type">Any</span>]]</span><br><span class="line"><span class="comment">// Primitive types and case classes can be also defined as</span></span><br><span class="line"><span class="comment">// implicit val stringIntMapEncoder: Encoder[Map[String, Any]] = ExpressionEncoder()</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// row.getValuesMap[T] retrieves multiple columns at once into a Map[String, T]</span></span><br><span class="line">teenagersDF.map(teenager =&gt; teenager.getValuesMap[<span class="type">Any</span>](<span class="type">List</span>(<span class="string">&quot;name&quot;</span>, <span class="string">&quot;age&quot;</span>))).collect()</span><br><span class="line"><span class="comment">// Array(Map(&quot;name&quot; -&gt; &quot;Justin&quot;, &quot;age&quot; -&gt; 19))</span></span><br></pre></td></tr></table></figure>
-<figure class="highlight txt"><table><tr><td class="code"><pre><span class="line"># people.txt</span><br><span class="line"># Find full example code at &quot;examples/src/main/scala/org/apache/spark/examples/sql/SparkSQLExample.scala&quot; in the Spark repo</span><br><span class="line">Michael, 29</span><br><span class="line">Andy, 30</span><br><span class="line">Justin, 19</span><br></pre></td></tr></table></figure>
-<h3 id="编程方式创建schema"><a class="header-anchor" href="#编程方式创建schema">¶</a>编程方式创建schema</h3>
-<p>当无法提前定义case类的时候(比如编码为字符串或者对文本数据集进行解析，并为不同的用户投影不同的字段)，需要用来以下三步以编程的方式创建DataFrame</p>
-<ol>
-<li>从原始RDD创建一个Rows类型的RDD</li>
-<li>创建一个代表schema的StructType，与步骤一的RDD进行匹配</li>
-<li>通过SparkSession中的<code>createDataFrame</code>方法将schema应用成RDD</li>
-</ol>
-<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> org.apache.spark.sql.<span class="type">Row</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.types._</span><br><span class="line"></span><br><span class="line"><span class="comment">// Create an RDD</span></span><br><span class="line"><span class="keyword">val</span> peopleRDD = spark.sparkContext.textFile(<span class="string">&quot;examples/src/main/resources/people.txt&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// The schema is encoded in a string</span></span><br><span class="line"><span class="keyword">val</span> schemaString = <span class="string">&quot;name age&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// Generate the schema based on the string of schema</span></span><br><span class="line"><span class="keyword">val</span> fields = schemaString.split(<span class="string">&quot; &quot;</span>)</span><br><span class="line">  .map(fieldName =&gt; <span class="type">StructField</span>(fieldName, <span class="type">StringType</span>, nullable = <span class="literal">true</span>))</span><br><span class="line"><span class="keyword">val</span> schema = <span class="type">StructType</span>(fields)</span><br><span class="line"></span><br><span class="line"><span class="comment">// Convert records of the RDD (people) to Rows</span></span><br><span class="line"><span class="keyword">val</span> rowRDD = peopleRDD</span><br><span class="line">  .map(_.split(<span class="string">&quot;,&quot;</span>))</span><br><span class="line">  .map(attributes =&gt; <span class="type">Row</span>(attributes(<span class="number">0</span>), attributes(<span class="number">1</span>).trim))</span><br><span class="line"></span><br><span class="line"><span class="comment">// Apply the schema to the RDD</span></span><br><span class="line"><span class="keyword">val</span> peopleDF = spark.createDataFrame(rowRDD, schema)</span><br><span class="line"></span><br><span class="line"><span class="comment">// Creates a temporary view using the DataFrame</span></span><br><span class="line">peopleDF.createOrReplaceTempView(<span class="string">&quot;people&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// SQL can be run over a temporary view created using DataFrames</span></span><br><span class="line"><span class="keyword">val</span> results = spark.sql(<span class="string">&quot;SELECT name FROM people&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// The results of SQL queries are DataFrames and support all the normal RDD operations</span></span><br><span class="line"><span class="comment">// The columns of a row in the result can be accessed by field index or by field name</span></span><br><span class="line">results.map(attributes =&gt; <span class="string">&quot;Name: &quot;</span> + attributes(<span class="number">0</span>)).show()</span><br><span class="line"><span class="comment">// +-------------+</span></span><br><span class="line"><span class="comment">// |        value|</span></span><br><span class="line"><span class="comment">// +-------------+</span></span><br><span class="line"><span class="comment">// |Name: Michael|</span></span><br><span class="line"><span class="comment">// |   Name: Andy|</span></span><br><span class="line"><span class="comment">// | Name: Justin|</span></span><br><span class="line"><span class="comment">// +-------------+</span></span><br></pre></td></tr></table></figure>
-<h2 id="标量函数"><a class="header-anchor" href="#标量函数">¶</a>标量函数</h2>
-<p>与聚合函数多行得到一个值返回不同，标量函数是每行返回一个值。Spark SQL支持多种<a href="https://spark.apache.org/docs/latest/sql-ref-functions.html#scalar-functions">Built-in Scalar Functions</a>，也支持<a href="https://spark.apache.org/docs/latest/sql-ref-functions-udf-scalar.html">User Defined Scalar Functions</a></p>
-<h2 id="聚合函数"><a class="header-anchor" href="#聚合函数">¶</a>聚合函数</h2>
-<p><code>Aggregate function</code>返回多行的一个值，<a href="https://spark.apache.org/docs/latest/sql-ref-functions-builtin.html#aggregate-functions">Built-in Aggregation Functions</a>提供了多种聚合函数——<code>count()</code>，<code>avg()</code>等等。用户也能自己创建聚合函数，更多细节参考<a href="https://spark.apache.org/docs/latest/sql-ref-functions-udf-aggregate.html">User Defined Aggregate Functions</a>。</p>
-]]></content>
-      <categories>
-        <category>大数据</category>
-        <category>Spark</category>
-        <category>Spark SQL</category>
-      </categories>
-      <tags>
-        <tag>Spark</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Spark#0 Spark准备环境</title>
     <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/%E5%87%86%E5%A4%87%E7%8E%AF%E5%A2%83/</url>
     <content><![CDATA[<blockquote>
 <p>笔者水平有限，结合官方文档，并加入了自己编程时的理解。如有疑惑可以参阅官方文档：<a href="https://spark.apache.org/docs/latest/index.html">https://spark.apache.org/docs/latest/index.html</a></p>
 </blockquote>
 <span id="more"></span>
-<h1>Spark单机环境的搭建</h1>
-<h2 id="前置工作"><a class="header-anchor" href="#前置工作">¶</a>前置工作</h2>
-<p><strong>需要的知识储备</strong></p>
+
+<h1 id="Spark单机环境的搭建"><a href="#Spark单机环境的搭建" class="headerlink" title="Spark单机环境的搭建"></a>Spark单机环境的搭建</h1><h2 id="前置工作"><a href="#前置工作" class="headerlink" title="前置工作"></a>前置工作</h2><p><strong>需要的知识储备</strong></p>
 <ol>
 <li>熟悉Java(至少要熟悉JVM)或者Python</li>
 <li>了解操作系统(指Linux)</li>
@@ -502,38 +406,99 @@
 </ol>
 <p><strong>这半个月的学习心得</strong></p>
 <p>第一次接触到大数据的学习，对笔者来说是相当大的一个挑战。询问得知公司使用的<code>spark</code>+<code>flink</code>框架后，规划了两天的学习路线之后开始了正式的学习。真正开始学习之后，发现光是Hadoop都够我吃一壶，没个一两年可能都不能完全掌握。因此个人将中心放在了基本原理、项目架构、运行流程上面，并没有过多的关注API的时候。在b站视频加网上博客的填鸭式学习后，终于将Hadoop三大组件(<code>HDFS</code>、<code>Map-Reduce</code>、<code>Yarn</code>)基本原理、流程弄清楚了。然后花了大概三天了解Scala的函数式编程，开始正式的学习。这半个月填鸭式学习，给笔者了大数据一个大概的脉络，但也没有整理知识，没有消化。这将在之后几个月的学习中慢慢完善。今天就从spark的单机环境的搭建开始吧。</p>
-<h2 id="安装"><a class="header-anchor" href="#安装">¶</a>安装</h2>
-<ol>
-<li>
-<p>安装JDK——略</p>
+<h2 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h2><ol>
+<li><p>安装JDK——略</p>
 </li>
-<li>
-<p>安装Scala</p>
+<li><p>安装Scala</p>
 <figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 从官方网站拉取，输出目录为/opt/module。</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> wget -o /opt/bigdata https://downloads.lightbend.com/scala/2.12.2/scala-2.12.2.tgz</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> 解压到/opt/module，到这里就安装完成了</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> tar -zxvf scala-2.12.2.tgz -C /opt/module</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> 配置环境变量</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> /etc 存放系统所需要所有的配置文件和子目录</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> 在当前Linux版本的内核中，将用户的配置从profile文件中独立出来，也就是不需要在profile中配置环境变量。在profile中用一个循环，执行profile.d文件夹中所有的shell脚本。配置文件的耦合大大降低</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> <span class="built_in">cd</span> etc/profile.d</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> vim my-evn.sh</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> scala</span></span><br><span class="line">export SCALA_HOME=/opt/module/scala-2.12.2</span><br><span class="line">export PATH=$PATH:$SCALA_HOME/bin</span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> 重新加载资源配置</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> <span class="built_in">source</span> /etc/profile</span></span><br></pre></td></tr></table></figure>
+
 <blockquote>
 <p>/opt目录一般用为主机安装额外的软件，关于FHS可以参考《鸟哥的Linux私房菜》一书，或者菜鸟教程Linux目录一章；</p>
 <p>关于wget的使用，可以通过<code>man wget</code>指令查看。</p>
 <blockquote>
-<p>因为篇幅的原因，这些具体的指令/规则个人不会提及。但笔者会说明是从哪些地方获得具体细致的资料。例如Linux中的shell命令，只要了解哪些指令可以做什么事，然后通过<code>man</code>工具就可以查看非常详细的文档，所以学习shell时没有必要花费太多的时候在记忆指令上，那些用的多指令用多了自然就记住了，用的少的指令也更加没有必要记忆，需要的时候查下文档即可，并不需要花费多少时间。</p>
+<p> 因为篇幅的原因，这些具体的指令/规则个人不会提及。但笔者会说明是从哪些地方获得具体细致的资料。例如Linux中的shell命令，只要了解哪些指令可以做什么事，然后通过<code>man</code>工具就可以查看非常详细的文档，所以学习shell时没有必要花费太多的时候在记忆指令上，那些用的多指令用多了自然就记住了，用的少的指令也更加没有必要记忆，需要的时候查下文档即可，并不需要花费多少时间。</p>
 </blockquote>
 </blockquote>
 </li>
-<li>
-<p>安装spark</p>
-<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 和上面差不多</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> 推荐清华镜像网站：https://mirrors.tuna.tsinghua.edu.cn/</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> 接下来解压配置环境变量如出一辙，不再赘述</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> wget -o /opt/bigdata https://mirrors.tuna.tsinghua.edu.cn/apache/spark/spark-3.1.1/spark-3.1.1-bin-hadoop3.2.tgz</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> 接下来配置spark</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> 到spark目录下的conf文件夹中拷贝出一份spark配置文件</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> cp spark-env.sh.template spark-env.sh</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> vi spar-env.sh</span></span><br><span class="line"></span><br><span class="line">export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.282.b08-1.el7_9.x86_64</span><br><span class="line">export SCALA_HOME=/opt/module/scala-2.12.2</span><br><span class="line">export SPARK__HOME=/opt/module/spark-3.1.1/spark-3.1.1-bin-hadoop3.2</span><br><span class="line">export SPARK_MASTER_IP=learn</span><br><span class="line">export SPARK_EXECUTOR_MEMORY=1G</span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> 拷贝一份worker</span></span><br><span class="line">cp workers.template wokers</span><br></pre></td></tr></table></figure>
-</li>
+<li><p>安装spark</p>
+<figure class="highlight shell"><table><tr><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 和上面差不多</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> 推荐清华镜像网站：https://mirrors.tuna.tsinghua.edu.cn/</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> 接下来解压配置环境变量如出一辙，不再赘述</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> wget -o /opt/bigdata https://mirrors.tuna.tsinghua.edu.cn/apache/spark/spark-3.1.1/spark-3.1.1-bin-hadoop3.2.tgz</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> 接下来配置spark</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> 到spark目录下的conf文件夹中拷贝出一份spark配置文件</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> cp spark-env.sh.template spark-env.sh</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> vi spar-env.sh</span></span><br><span class="line"></span><br><span class="line">export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.282.b08-1.el7_9.x86_64</span><br><span class="line">export SCALA_HOME=/opt/module/scala-2.12.2</span><br><span class="line">export SPARK__HOME=/opt/module/spark-3.1.1/spark-3.1.1-bin-hadoop3.2</span><br><span class="line">export SPARK_MASTER_IP=learn</span><br><span class="line">export SPARK_EXECUTOR_MEMORY=1G</span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> 拷贝一份worker</span></span><br><span class="line">cp workers.template wokers</span><br></pre></td></tr></table></figure></li>
 </ol>
 <p>至此Spark的单机环境搭建结束</p>
-<h2 id="运行示例和Shell"><a class="header-anchor" href="#运行示例和Shell">¶</a>运行示例和Shell</h2>
-<p>Spark自带了几个示例程序。在Spark安装根目录使用<code>bin/run-example &lt;class&gt; [params]</code>即可</p>
+<h2 id="运行示例和Shell"><a href="#运行示例和Shell" class="headerlink" title="运行示例和Shell"></a>运行示例和Shell</h2><p>Spark自带了几个示例程序。在Spark安装根目录使用<code>bin/run-example &lt;class&gt; [params]</code>即可</p>
 <figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">./bin/run-example SparkPi 10 </span><br></pre></td></tr></table></figure>
+
 <p>也可以通过<code>Scala shell</code>进行交互。</p>
 <figure class="highlight shell"><table><tr><td class="code"><pre><span class="line">./bin/run-example --master local[2]</span><br></pre></td></tr></table></figure>
+
 <p><code>--master</code>选项指定了分布式集群的<code>master URL</code>，<code>local[N]</code>会使用N个线程在本地运行。</p>
 ]]></content>
       <categories>
         <category>大数据</category>
         <category>Spark</category>
+      </categories>
+      <tags>
+        <tag>Spark</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Spark#4 Spark SQL概述</title>
+    <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/SparkSQL/Spark%20SQL/</url>
+    <content><![CDATA[<h1 id="Spark-SQL概述"><a href="#Spark-SQL概述" class="headerlink" title="Spark SQL概述"></a>Spark SQL概述</h1><p>Spark SQL是用于结构化数据处理的Spark模块。与Spark RDD API不同，Spark SQL提供的接口可以为Spark提供更多的数据及其计算时的结构信息。Spark使用这些额外的信息实现一些优化。用户可以使用SQL或者Dataset API对SparkSQL进行操作。由于它和用户使用的API或者开发语言无关，这意味着开发人员可以在多个API中轻松地切换</p>
+<span id="more"></span>
+
+<h2 id="SQL"><a href="#SQL" class="headerlink" title="SQL"></a>SQL</h2><p>SparkSQL可以用来执行SQL查询，从一个Hive实例中查询数据。可以从<a href="https://spark.apache.org/docs/latest/sql-data-sources-hive-tables.html">Hive Tables - Spark 3.1.1 Documentation (apache.org)</a>中了解更多的配置。</p>
+<p>当使用另外一种编程语言中运行SQL时，结果将作为<code>Dataset/DataFrame</code>返回。也能使用命令行或者JDBC对SQL进行操作</p>
+<h2 id="Datasets和DataFrames"><a href="#Datasets和DataFrames" class="headerlink" title="Datasets和DataFrames"></a>Datasets和DataFrames</h2><p>dataset是分布式的数据集。Dataset在Spark1.6之后加入，结合了RDD的优点(强类型，lambda函数的能力)，和Spark SQL的优化执行引擎的优点。数据集能从JVM对象中创建，并使用<code>transformation</code>对其进行操作。python暂不支持Dataset API。但是由于python的动态特性，Dataset API的很多优点实际在python中可以体现。</p>
+<p>DataFrame是按列为名称构造的Dataset。它在概念上等价于关系型数据库或者R/Python中的视图，不过在引擎层面有着更加丰富的优化。DataFrame可以从各种各样的数据源中构建，例如：结构数据文件，Hive表，第三方数据库，或者是一个存在的RDD。DataDrameAPI可以供Scala、Java、Python、R使用。在Java或者Scala中，DataFrame是由Rows的Dataset来表示</p>
+<h1 id="起步"><a href="#起步" class="headerlink" title="起步"></a>起步</h1><h2 id="SparkSession"><a href="#SparkSession" class="headerlink" title="SparkSession"></a>SparkSession</h2><p>Spark中所有功能的入口都是<code>SparkSession</code>类。我们使用<code>SparkSession.builder()</code>创建一个基础的SparkSession</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">import</span> org.apache.spark.sql.<span class="type">SparkSession</span></span><br><span class="line"></span><br><span class="line">scala&gt; <span class="keyword">val</span> spark = <span class="type">SparkSession</span>.</span><br><span class="line">     | builder().</span><br><span class="line">     | appName(<span class="string">&quot;Spark SQL basic example&quot;</span>).</span><br><span class="line">     | config(<span class="string">&quot;spark.some.config.option&quot;</span>, <span class="string">&quot;some-value&quot;</span>).</span><br><span class="line">     | getOrCreate</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>SparkSession是Spark2.0开始为Hive特性提供的内部支持，包括使用HiveQL进行查询，访问Hive UDFs以及读取Hive table的数据。</p>
+<h2 id="创建DataFrame"><a href="#创建DataFrame" class="headerlink" title="创建DataFrame"></a>创建DataFrame</h2><p>当Spark Session创建完成之后，我们就能使用RDD、Hive table或者是其他Spark数据源来创建一个DataFrame。</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> df = spark.read.json(<span class="string">&quot;examples/src/main/resources/people.json&quot;</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; df.show</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight json"><table><tr><td class="code"><pre><span class="line"><span class="comment">// people.json</span></span><br><span class="line">&#123;<span class="attr">&quot;name&quot;</span>:<span class="string">&quot;Michael&quot;</span>&#125;</span><br><span class="line">&#123;&quot;name&quot;:&quot;Andy&quot;, &quot;age&quot;:30&#125;,</span><br><span class="line">&#123;<span class="attr">&quot;name&quot;</span>:<span class="string">&quot;Justin&quot;</span>, <span class="attr">&quot;age&quot;</span>:<span class="number">19</span>&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Untyped-Dataset操作-又名DataFrame操作"><a href="#Untyped-Dataset操作-又名DataFrame操作" class="headerlink" title="Untyped Dataset操作(又名DataFrame操作)"></a>Untyped Dataset操作(又名DataFrame操作)</h2><p>如上文所述，DataFrame是Java和Scala API中Rows类型的Dataset。和Java/Scala中的强类型Dataset不同，这些操作以一种无类型transformation的形式引用。</p>
+<p>这里举出了一些使用Dataset的结构化数据的例子：</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> spark.implicits._</span><br><span class="line"></span><br><span class="line"><span class="comment">// 以树形的格式打印视图(元数据)</span></span><br><span class="line">df.printScheme()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 选择名称为&quot;name&quot;的一列</span></span><br><span class="line">df.select(<span class="string">&quot;name&quot;</span>).show()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 选择&quot;name&quot;,和&quot;age&quot;，并将age的数值加一</span></span><br><span class="line">df.select($<span class="string">&quot;name&quot;</span>, $<span class="string">&quot;age&quot;</span> + <span class="number">1</span>).show()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 选择age &gt; 21的成员</span></span><br><span class="line">df.filter($<span class="string">&quot;age&quot;</span> &gt; <span class="number">21</span>).show()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 以年龄为分组</span></span><br><span class="line">df.groupBy(<span class="string">&quot;age&quot;</span>).count().show()</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>完整的操作见<a href="https://spark.apache.org/docs/latest/api/scala/org/apache/spark/sql/Dataset.html">API Documentation</a></p>
+<p>除了简单的列引用和表达式，Dataset还提供了丰富的类库，包括：字符串操作，日期算术，常见的数学运算等等。参考<a href="https://spark.apache.org/docs/latest/api/scala/org/apache/spark/sql/functions$.html">DataFrame Function Reference</a></p>
+</blockquote>
+<h2 id="SQL编程"><a href="#SQL编程" class="headerlink" title="SQL编程"></a>SQL编程</h2><p>Spark的<code>sql</code>函数能够让SQL以编程形式运行并将一个DataFrame作为结果返回</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">df.createOrReplaceTempView(<span class="string">&quot;people&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> sqlDF = spark.sql(<span class="string">&quot;SELECT * FROM people&quot;</span>)</span><br><span class="line">sqlDF.show</span><br></pre></td></tr></table></figure>
+
+<h2 id="全局临时视图"><a href="#全局临时视图" class="headerlink" title="全局临时视图"></a>全局临时视图</h2><p>Spark SQL的临时视图作用域是会话域，如果创建视图的会话终止，那么视图也会消失。如果希望能够在所有会话中共享一个临时视图，并让其保持活动状态直到Spark应用程序终止，我们可以使用<code>global temporary view</code>。全局临时视图域系统保留的数据库<code>global_temp</code>绑定。我们需要使用正确的名称创建它，如<code>SELECT * FROM global_temp.view1</code></p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 注册一个全局临时视图</span></span><br><span class="line">df.createGlobalTempView(<span class="string">&quot;people&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 全局临时视图与global_temp关联</span></span><br><span class="line">spark.sql(<span class="string">&quot;SELECT * FROM global_temp.people&quot;</span>).show()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 全局临时视图的作用域</span></span><br><span class="line">spark.newSession().sql(<span class="string">&quot;SELECT * FROM global_temp.people&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<h2 id="创建Datasets"><a href="#创建Datasets" class="headerlink" title="创建Datasets"></a>创建Datasets</h2><p>Datasets类似于RDDs，不过没有使用Java serialization或者Kryo，而是使用专门的编码器来序列化对象，以便在网络进行处理或传输。</p>
+<p>编码器和标准序列化都能将一个对象转化成一个字符数组，但是编码器是动态生成的，而且不需要进行阶码就可以支持Spark的很多操作，例如<code>filtering</code>，<code>sorting</code>，<code>hashing</code></p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">Person</span>(<span class="params">name: <span class="type">String</span>, age: <span class="type">Long</span></span>)</span></span><br><span class="line"><span class="class"><span class="comment">// 为case class创建编码器</span></span></span><br><span class="line"><span class="class"><span class="title">val</span> <span class="title">caseClassDs</span> </span>= <span class="type">Seq</span>(<span class="type">Person</span>(<span class="string">&quot;Any&quot;</span>, <span class="number">32</span>)).toDS()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 大多数常见类型的编码器是由`spark.implicits._`库自动导入</span></span><br><span class="line"><span class="keyword">val</span> primitiveDS = <span class="type">Seq</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>).toDS()</span><br><span class="line">primitiveDS.map(_ + <span class="number">1</span>).collect()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 通过传递一个类，可以将DataFrames转换成Dataset。映射根据名称进行</span></span><br><span class="line"><span class="keyword">val</span> path = <span class="string">&quot;src/main/resources/people.json&quot;</span></span><br><span class="line"><span class="keyword">val</span> peopleDS = spark.read.json(path).as[<span class="type">Person</span>]</span><br><span class="line">peopleDS.show()</span><br></pre></td></tr></table></figure>
+
+<h2 id="RDD互操作"><a href="#RDD互操作" class="headerlink" title="RDD互操作"></a>RDD互操作</h2><p>Spark SQL支持两种不同的方法，将现有RDD转换为数据集。第一个方法是通过反射来推断RDD的schema。基于反射的方式在你了解Spark应用程序的所有schema时，可以让程序变得更加简洁。</p>
+<p>第二种方式是允许用户通过一个动态接口创建一个schema并将其应用到一个现有的RDD中。这种方式更加啰嗦，但是它允许你在程序不知道列名或者类型的情况下创建datasets</p>
+<h3 id="使用反射进行推断"><a href="#使用反射进行推断" class="headerlink" title="使用反射进行推断"></a>使用反射进行推断</h3><p>如前文所述，Spark SQL的Scala接口支持将包含<code>case class</code>的RDD转换成DataFrame。这个case class定义了表的视图。case class参数的名称被映射为列名称。case class也是能够嵌套的，它可以包含复杂类型例如<code>Seqs</code>和<code>Arrays</code>。这个RDD能够也能隐式转换成DataFrame，然后注册成一个表。</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> spark.implicits._</span><br><span class="line"></span><br><span class="line"><span class="comment">// Create an RDD of Person objects from a text file, convert it to a Dataframe</span></span><br><span class="line"><span class="keyword">val</span> peopleDF = spark.sparkContext</span><br><span class="line">  .textFile(<span class="string">&quot;examples/src/main/resources/people.txt&quot;</span>)</span><br><span class="line">  .map(_.split(<span class="string">&quot;,&quot;</span>))</span><br><span class="line">  .map(attributes =&gt; <span class="type">Person</span>(attributes(<span class="number">0</span>), attributes(<span class="number">1</span>).trim.toInt))</span><br><span class="line">  .toDF()</span><br><span class="line"><span class="comment">// Register the DataFrame as a temporary view</span></span><br><span class="line">peopleDF.createOrReplaceTempView(<span class="string">&quot;people&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// SQL statements can be run by using the sql methods provided by Spark</span></span><br><span class="line"><span class="keyword">val</span> teenagersDF = spark.sql(<span class="string">&quot;SELECT name, age FROM people WHERE age BETWEEN 13 AND 19&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// The columns of a row in the result can be accessed by field index</span></span><br><span class="line">teenagersDF.map(teenager =&gt; <span class="string">&quot;Name: &quot;</span> + teenager(<span class="number">0</span>)).show()</span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"><span class="comment">// |       value|</span></span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"><span class="comment">// |Name: Justin|</span></span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// or by field name</span></span><br><span class="line">teenagersDF.map(teenager =&gt; <span class="string">&quot;Name: &quot;</span> + teenager.getAs[<span class="type">String</span>](<span class="string">&quot;name&quot;</span>)).show()</span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"><span class="comment">// |       value|</span></span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"><span class="comment">// |Name: Justin|</span></span><br><span class="line"><span class="comment">// +------------+</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// No pre-defined encoders for Dataset[Map[K,V]], define explicitly</span></span><br><span class="line"><span class="keyword">implicit</span> <span class="keyword">val</span> mapEncoder = org.apache.spark.sql.<span class="type">Encoders</span>.kryo[<span class="type">Map</span>[<span class="type">String</span>, <span class="type">Any</span>]]</span><br><span class="line"><span class="comment">// Primitive types and case classes can be also defined as</span></span><br><span class="line"><span class="comment">// implicit val stringIntMapEncoder: Encoder[Map[String, Any]] = ExpressionEncoder()</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// row.getValuesMap[T] retrieves multiple columns at once into a Map[String, T]</span></span><br><span class="line">teenagersDF.map(teenager =&gt; teenager.getValuesMap[<span class="type">Any</span>](<span class="type">List</span>(<span class="string">&quot;name&quot;</span>, <span class="string">&quot;age&quot;</span>))).collect()</span><br><span class="line"><span class="comment">// Array(Map(&quot;name&quot; -&gt; &quot;Justin&quot;, &quot;age&quot; -&gt; 19))</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight txt"><table><tr><td class="code"><pre><span class="line"># people.txt</span><br><span class="line"># Find full example code at &quot;examples/src/main/scala/org/apache/spark/examples/sql/SparkSQLExample.scala&quot; in the Spark repo</span><br><span class="line">Michael, 29</span><br><span class="line">Andy, 30</span><br><span class="line">Justin, 19</span><br></pre></td></tr></table></figure>
+
+<h3 id="编程方式创建schema"><a href="#编程方式创建schema" class="headerlink" title="编程方式创建schema"></a>编程方式创建schema</h3><p>当无法提前定义case类的时候(比如编码为字符串或者对文本数据集进行解析，并为不同的用户投影不同的字段)，需要用来以下三步以编程的方式创建DataFrame</p>
+<ol>
+<li>从原始RDD创建一个Rows类型的RDD</li>
+<li>创建一个代表schema的StructType，与步骤一的RDD进行匹配</li>
+<li>通过SparkSession中的<code>createDataFrame</code>方法将schema应用成RDD</li>
+</ol>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> org.apache.spark.sql.<span class="type">Row</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.types._</span><br><span class="line"></span><br><span class="line"><span class="comment">// Create an RDD</span></span><br><span class="line"><span class="keyword">val</span> peopleRDD = spark.sparkContext.textFile(<span class="string">&quot;examples/src/main/resources/people.txt&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// The schema is encoded in a string</span></span><br><span class="line"><span class="keyword">val</span> schemaString = <span class="string">&quot;name age&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// Generate the schema based on the string of schema</span></span><br><span class="line"><span class="keyword">val</span> fields = schemaString.split(<span class="string">&quot; &quot;</span>)</span><br><span class="line">  .map(fieldName =&gt; <span class="type">StructField</span>(fieldName, <span class="type">StringType</span>, nullable = <span class="literal">true</span>))</span><br><span class="line"><span class="keyword">val</span> schema = <span class="type">StructType</span>(fields)</span><br><span class="line"></span><br><span class="line"><span class="comment">// Convert records of the RDD (people) to Rows</span></span><br><span class="line"><span class="keyword">val</span> rowRDD = peopleRDD</span><br><span class="line">  .map(_.split(<span class="string">&quot;,&quot;</span>))</span><br><span class="line">  .map(attributes =&gt; <span class="type">Row</span>(attributes(<span class="number">0</span>), attributes(<span class="number">1</span>).trim))</span><br><span class="line"></span><br><span class="line"><span class="comment">// Apply the schema to the RDD</span></span><br><span class="line"><span class="keyword">val</span> peopleDF = spark.createDataFrame(rowRDD, schema)</span><br><span class="line"></span><br><span class="line"><span class="comment">// Creates a temporary view using the DataFrame</span></span><br><span class="line">peopleDF.createOrReplaceTempView(<span class="string">&quot;people&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// SQL can be run over a temporary view created using DataFrames</span></span><br><span class="line"><span class="keyword">val</span> results = spark.sql(<span class="string">&quot;SELECT name FROM people&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// The results of SQL queries are DataFrames and support all the normal RDD operations</span></span><br><span class="line"><span class="comment">// The columns of a row in the result can be accessed by field index or by field name</span></span><br><span class="line">results.map(attributes =&gt; <span class="string">&quot;Name: &quot;</span> + attributes(<span class="number">0</span>)).show()</span><br><span class="line"><span class="comment">// +-------------+</span></span><br><span class="line"><span class="comment">// |        value|</span></span><br><span class="line"><span class="comment">// +-------------+</span></span><br><span class="line"><span class="comment">// |Name: Michael|</span></span><br><span class="line"><span class="comment">// |   Name: Andy|</span></span><br><span class="line"><span class="comment">// | Name: Justin|</span></span><br><span class="line"><span class="comment">// +-------------+</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="标量函数"><a href="#标量函数" class="headerlink" title="标量函数"></a>标量函数</h2><p>与聚合函数多行得到一个值返回不同，标量函数是每行返回一个值。Spark SQL支持多种<a href="https://spark.apache.org/docs/latest/sql-ref-functions.html#scalar-functions">Built-in Scalar Functions</a>，也支持<a href="https://spark.apache.org/docs/latest/sql-ref-functions-udf-scalar.html">User Defined Scalar Functions</a></p>
+<h2 id="聚合函数"><a href="#聚合函数" class="headerlink" title="聚合函数"></a>聚合函数</h2><p><code>Aggregate function</code>返回多行的一个值，<a href="https://spark.apache.org/docs/latest/sql-ref-functions-builtin.html#aggregate-functions">Built-in Aggregation Functions</a>提供了多种聚合函数——<code>count()</code>，<code>avg()</code>等等。用户也能自己创建聚合函数，更多细节参考<a href="https://spark.apache.org/docs/latest/sql-ref-functions-udf-aggregate.html">User Defined Aggregate Functions</a>。</p>
+]]></content>
+      <categories>
+        <category>大数据</category>
+        <category>Spark</category>
+        <category>Spark SQL</category>
       </categories>
       <tags>
         <tag>Spark</tag>
