@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><meta><title>Java多线程(1) Java内存模型 - Yoveuio Blog</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Yoveuio Blog"><meta name="msapplication-TileImage" content="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153615.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Yoveuio Blog"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="Java的内存可见性很容易困扰着Java程序员，本文就是着重讲诉Java的内存可见性问题"><meta property="og:type" content="blog"><meta property="og:title" content="Yoveuio"><meta property="og:url" content="https://yoveuio.github.io/"><meta property="og:site_name" content="Yoveuio"><meta property="og:description" content="Java的内存可见性很容易困扰着Java程序员，本文就是着重讲诉Java的内存可见性问题"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://cdn.jsdelivr.net/gh/removeif/removeif-demo@latest/img/avatar.png"><meta property="article:published_time" content="2021-04-26T12:57:42.819Z"><meta property="article:modified_time" content="2021-04-26T13:30:09.507Z"><meta property="article:author" content="Yoveuio"><meta property="article:tag" content="多线程"><meta property="twitter:card" content="summary"><meta property="twitter:image" content="https://cdn.jsdelivr.net/gh/removeif/removeif-demo@latest/img/avatar.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://yoveuio.github.io/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/2%20java%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/"},"headline":"Yoveuio Blog","image":["https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715101024.png","https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715102424.png","https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715103857.png","https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715144224.png","https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715144430.png","https://gitee.com/yovette/Images/raw/master/img/20201017220247.png","https://gitee.com/yovette/Images/raw/master/img/20201018140304.png","https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715164006.png","https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200716145806.png","https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200716162905.png","https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200716162913.png","https://gitee.com/yovette/Images/raw/master/img/20200716170518.png","https://gitee.com/yovette/Images/raw/master/img/20201018153317.png","https://gitee.com/yovette/Images/raw/master/img/20201018154059.png","https://gitee.com/yovette/Images/raw/master/img/20201018154839.png"],"datePublished":"2021-04-26T12:57:42.819Z","dateModified":"2021-04-26T13:30:09.507Z","author":{"@type":"Person","name":"yoveuio"},"description":"Java的内存可见性很容易困扰着Java程序员，本文就是着重讲诉Java的内存可见性问题"}</script><link rel="canonical" href="https://yoveuio.github.io/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/2%20java%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/"><link rel="icon" href="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153615.png"><meta name="referrer" content="no-referrer-when-downgrade"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/font-awesome/5.12.0/css/all.min.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/highlight.js/9.12.0/styles/atom-one-light.min.css"><link rel="stylesheet" href="https://fonts.loli.net/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro"><link rel="stylesheet" href="/css/default.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/font-awesome/5.12.0/css/all.min.css"><link rel="stylesheet" href="https://fonts.loli.net/css?family=Ubuntu:400,600|Source+Code+Pro|Monda:300,300italic,400,400italic,700,700italic|Roboto Slab:300,300italic,400,400italic,700,700italic|Microsoft YaHei:300,300italic,400,400italic,700,700italic|PT Mono:300,300italic,400,400italic,700,700italic&amp;amp;subset=latin,latin-ext|Inconsolata|Itim|Lobster.css"><script src="https://cdnjs.loli.net/ajax/libs/jquery/3.3.1/jquery.min.js"></script><script src="/js/globalUtils.js"></script><style>body>.footer,body>.navbar,body>.section{opacity:0}</style><!--!--><!--!--><script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" defer></script><!--!--><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/lightgallery/1.6.8/css/lightgallery.min.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/justifiedGallery/3.7.0/css/justifiedGallery.min.css"><!--!--><!--!--><script src="https://cdnjs.loli.net/ajax/libs/pace/1.0.2/pace.min.js"></script><meta name="generator" content="Hexo 5.4.0"></head><body class="is-3-column has-navbar-fixed-top"><nav class="navbar navbar-main is-fixed-top"><div class="container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153630.gif" alt="Yoveuio Blog" height="28"></a></div><div class="navbar-menu"><div class="navbar-start"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="Download on GitHub" href="https://github.com/removeif/hexo-theme-amazing"><i class="fab fa-github"></i></a><a class="navbar-item is-hidden-tablet catalogue" title="目录" href="javascript:;"><i class="fas fa-list-ul"></i></a><a class="navbar-item search" title="搜索" href="javascript:;"><i class="fas fa-search"></i></a><a class="navbar-item" id="night-nav" title="Night Mode" href="javascript:;"><i class="fas fa-moon" id="night-icon"></i></a></div></div></div></nav><script type="text/javascript" src="/js/theme-setting.js"></script><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><!--!--><div class="card"><article class="card-content article" role="article"><div class="article-meta size-small is-uppercase level is-mobile"><div class="level-left"><i class="far fa-calendar-plus"> </i>2021-04-26  <a class="commentCountImg" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/2%20java%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/#comment-container"><span class="display-none-class">/2021/04/26/Java/多线程/2 java内存模型/</span><i class="far fa-comment-dots"></i> <span class="commentCount" id="7cdfe941caf0619feed1c811b71f07df">99+</span>  </a><span class="level-item"><i class="far fa-clock"> </i>39 分钟  <i class="fas fa-pencil-alt"> </i>5.9 k</span><span class="level-item" id="busuanzi_container_page_pv"><span id="busuanzi_value_page_pv">0</span>次访问</span></div></div><h1 class="title is-3 is-size-4-mobile">Java多线程(1) Java内存模型</h1><div class="content"><p>Java的内存可见性很容易困扰着Java程序员，本文就是着重讲诉Java的内存可见性问题</p>
+<span id="more"></span>
+
+<h1 id="Java内存模型"><a href="#Java内存模型" class="headerlink" title="Java内存模型"></a>Java内存模型</h1><h2 id="Java内存模型的基础"><a href="#Java内存模型的基础" class="headerlink" title="Java内存模型的基础"></a>Java内存模型的基础</h2><h3 id="Java并发编程的两个关键性问题"><a href="#Java并发编程的两个关键性问题" class="headerlink" title="Java并发编程的两个关键性问题"></a>Java并发编程的两个关键性问题</h3><p>​    在并发编程中，需要处理两个关键性问题：<strong>线程之间如何通信</strong>及<strong>线程之间如何同步</strong>。通信是指线程之间以何种机制来交换信息，在命令式编程中，线程之间的通信机制有两种：**<code>共享内存</code><strong>和</strong><code>消息传递</code>**。</p>
+<p>​    在共享内存的并发模型里，线程之间共享程序的公共状态，通过<strong>写-读状态完成隐式通信</strong>。而在消息传递的并发模型里，线程之间没有公共状态，线程之间必须通过发送消息来显示进行通信。</p>
+<p>​    同步是指程序中用于控制不同线程间操作发生相对顺序的机制。在共享内存并发模型里，同步是显示进行的。程序员必须显示指定某个方法或某段代码需要在线程之间互斥执行。在消息传递的并发模型里，由于消息的发送必须在消息的接  收之前，因此同步是隐式进行的。</p>
+<p>​    Java的并发采用的是共享内存模式，Java线程之间的通信总是隐式进行的，整个通信过程对程序员完全透明。编写多线程程序就需要理解隐式进行的线程之间通信的工作。</p>
+<h3 id="Java内存模型的抽象结构"><a href="#Java内存模型的抽象结构" class="headerlink" title="Java内存模型的抽象结构"></a>Java内存模型的抽象结构</h3><p>在Java中，所有实例域、静态域和数组元素都存储在堆内存中，堆内存在线程之间共享。局部变量、方法定义参数和异常处理器参数不会在线程之间共享，不会有内存可见性问题，也不受内存模型的影响。</p>
+<p>Java线程之间的通信由<code>Java内存模型（JMM）</code>控制，JMM决定一个线程对共享变量的写入何时对另一个线程可见。从抽象的角度来看，JMM定义了线程和主内存之间的抽象关系：<strong>线程之间的共享变量存储在主内存中，每个线程都有一个私有的本地内存，本地内存中存储了该线程以读/写共享变量的副本。本地内存是JMM的一个抽象概念，并不真实存在</strong>。它涵盖了缓存、写缓冲区、寄存器已经其他的硬件和编译器优化。</p>
+<p>抽象结构如下图：</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715101024.png" alt="image-20200715101016387"></p>
+<p>线程A与线程B的通信，需要经过两个步骤：</p>
+<ul>
+<li><p>线程A把本地内存A中更新过的共享变量刷新到主内存中去</p>
+</li>
+<li><p>线程B到主内存中去读取线程A之前已更新过的值。</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715102424.png" alt="image-20200715102422782"></p>
+</li>
+</ul>
+<p>​         由上图可见，JMM是通过控制主内存与每个线程的本地内存之间的交互，来为Java程序员提供内存可见性的保证的。</p>
+<h3 id="从源代码到指令序列的重排序"><a href="#从源代码到指令序列的重排序" class="headerlink" title="从源代码到指令序列的重排序"></a>从源代码到指令序列的重排序</h3><p>在执行程序时，为了提高性能，编译器和处理器常常会对指令做重排序。重排序分为三个种类：</p>
+<ul>
+<li><p><strong>编译器优化的重排序</strong>：在不改变<strong>单线程</strong>语义的前提下，可以重新安排语句的执行顺序</p>
+</li>
+<li><p><strong>指令级重排序</strong>：现代处理器采用**<code>指令级并行技术</code>**来将多条指令重叠执行。如果不存在数据依赖性，处理器可以该改变语句对应机器指令的执行顺序</p>
+</li>
+<li><p><strong>内存系统的重排序</strong>：由于处理器使用缓存和读/写缓冲区，这使得加载和存储操作看上去可能是在乱序执行。</p>
+<p>从Java源代码到最终实际执行的指令序列，会分别经历下面3中重排序。</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715103857.png" alt="image-20200715103856241"></p>
+<p>1属于编译器重排序，2和3属于处理器重排序。这些重排序可能会导致多线程程序的内存可见性问题。</p>
+<p>对于编译器，JMM的编译器重排序规则会禁止特定类型的编译器重排序（不是所有的编译器重排序都要禁止）。对于处理器重排序，JMM的处理器重排序规则会要求Java编译器在生成指令序列时，会插入特定的<strong>内存屏障</strong>（Memory Barries， Intel称之为Memory Fench）指令，通过内存屏障指令来禁止特定类型的处理器重排序。</p>
+<p>JMM属于语言级的内存模型，他确保在不同编译器和不同的处理器平台之上，通过禁止特定类型的编译器重排序和处理器重排序，为程序员提供一致的内存可见性保证。</p>
+</li>
+</ul>
+<h3 id="并发编程模型的分类"><a href="#并发编程模型的分类" class="headerlink" title="并发编程模型的分类"></a>并发编程模型的分类</h3><p>现代处理器使用写缓冲区临时保存向内存写入的数据。<strong>写缓冲区可以保证指令流水线持续运行</strong>，用于<strong>避免由于处理器停顿下来等待向内存写入数据而产生的延迟</strong>。同时通过以批处理的方式刷新缓冲区，以及合并写缓冲区中对同一内存地址的多次写，<strong>减少堆内存总线的占用</strong>。</p>
+<p>虽然写缓冲区的好处很多，但每个处理器上的写缓冲区，<strong>仅仅对它所在的处理器可见</strong>！这个特性会对内存操作的执行顺序产生重要的影响：处理器对内存的读/写操作的执行顺序，不一定与内存实际发生的读/写操作顺序一致。见下图：<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715144224.png" alt="处理器操作内存的执行结果"></p>
+<p>原因见下图：<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715144430.png" alt="操作内存导致结果不一致的原因"></p>
+<p>  关键原因就是：<strong>写缓冲区仅对自己的处理器可见</strong>，它会导致处理器执行内存操作的顺序可能和内存实际操作顺序不一致。由于现代的处理器都会使用写缓冲区，故而现代的处理器都会允许对写-读操作进行重排序。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201017220247.png" alt="常见处理器的重排序规则"></p>
+<p>为了保证内存可见性，在硬件层面提供了两类屏障：<code>Load Barries</code>和<code>Store Barries</code></p>
+<ul>
+<li><code>Load Barries</code>：让高速缓存中的所有数据失效，强制从主内存加载数据</li>
+<li><code>Store Barries</code>：让写缓冲区的最新数据写入到内存，让其他线程可见</li>
+</ul>
+<p>Java编译器在生成指令序列的适当位置会插入内存屏障指令来禁止特定类型的处理器重排序。JMM将内存屏障指令分为4类，如下表所示：</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201018140304.png" alt="内存屏障指令"></p>
+<p><code>StoreLoad Barries</code>屏障同时具有3个屏障的效果，现代多处理器大多支持该屏障。执行该屏障开销会很昂贵，因为当前处理器通常要把写缓冲区中的数据全部刷新到内存中。</p>
+<h3 id="happens-before简介"><a href="#happens-before简介" class="headerlink" title="happens-before简介"></a>happens-before简介</h3><p>  JSR-133使用<strong>happens-before的概念来阐述操作之间的内存可见性</strong>。在JMM中，如果一个操作执行的结果需要对另一个操作可见，那么这两个操作之间必须要存在happens-before关系。这里提到的两个操作既可以是在一个线程之内，也可以是在不同线程之间。</p>
+<p>  happens-before规则如下：</p>
+<ul>
+<li><strong>程序顺序规则</strong>：一个线程中的每个操作，happens-before于该线程中的任意后续操作。</li>
+<li><strong>监视器锁规则</strong>：对一个锁的解锁，happens-before于随后对这个锁的加锁。</li>
+<li><strong>volatile变量规则</strong>：对一个volatile域的写，happens-before于任意后续对这个volatile域的任意后续对这个volatile域的读。</li>
+<li><strong>传递性</strong>：如果A happens-before B，且B happens-before C，那么A happens-before C。</li>
+</ul>
+<p>🔺：两个操作之间具有happens-before关系，并不意味着前一个操作必须要在后一个操作之前执行！仅仅要求前一个操作（执行的结果）对后一个操作可见，且前一个操作按顺序排在第二个操作之前。只要结果一致(参见结果一致性)，JMM会认为这种重排序并不非法。</p>
+<p>一个happens-before规则对应于一个或多个编译器和处理器重排序规则。happens-before规则简单易懂，不需要Java程序员为了理解JMM提供的内存可见性保证而去学习复杂的重排序规则以及这些规则的具体实现方法。</p>
+<h2 id="重排序"><a href="#重排序" class="headerlink" title="重排序"></a>重排序</h2><p>重排序是编译器和处理器为了优化程序性能而对指令序列进行重新排序的一种手段</p>
+<h3 id="数据依赖性"><a href="#数据依赖性" class="headerlink" title="数据依赖性"></a>数据依赖性</h3><p>  如果两个操作访问同一个变量，且这两个操作中有一个为写操作，此时这两个操作之间就存在数据依赖性</p>
+<p>  编译器和处理器不会对有数据依赖性的两个操作进行重排序。这里所说的<strong>数据依赖性仅针对单个处理器中执行的指令序列和单个线程中执行的操作</strong>。不同处理器之间和不同线程之间的数据依赖性不被编译器和处理器考虑。</p>
+<h3 id="as-if-serial语义"><a href="#as-if-serial语义" class="headerlink" title="as-if-serial语义"></a>as-if-serial语义</h3><p>  <code>as-if-serial</code>的意思是：不管怎么重排序，（单线程）程序的执行结果不能被改变。编译器、runtime和处理器都必须遵守as-is-serial语义。</p>
+<p>  如上文所说，编译器和处理器不会对存在数据依赖关系的操作做重排序，因为这种重排序会改变执行结果。但是如果操作之间不存在数据依赖关系，这些操作就可能编译器和处理器重排序，不过这种重排序不会改变最终的执行结果</p>
+<h3 id="重排序对多线程的影响"><a href="#重排序对多线程的影响" class="headerlink" title="重排序对多线程的影响"></a>重排序对多线程的影响</h3><p>看如下代码</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">ReorderExample</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> a = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">boolean</span> flag = <span class="keyword">false</span>;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">write</span><span class="params">()</span></span>&#123;</span><br><span class="line">    	a = <span class="number">1</span>;</span><br><span class="line">        flag = <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">reader</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">if</span>(flag) &#123;</span><br><span class="line">            <span class="keyword">int</span> i = a*a;</span><br><span class="line">            ...</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>假设有两个线程A和B，A执行write方法，B执行reader方法。线程在执行if里面的语句时，能否看到线程A对a变量的写入呢？</p>
+<p>答案是：<strong>不一定能看到</strong>。write方法中的两个语句没有明显的数据以来关系，编译器和处理器可以对两个操作重排序；见下图：<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715164006.png" alt="image-20200715163950028"></p>
+<p>这时多程序程序的语义就被破坏了。</p>
+<p><strong>解决方法</strong>：利用happens-before规则中的volatile</p>
+<h2 id="顺序一致性"><a href="#顺序一致性" class="headerlink" title="顺序一致性"></a>顺序一致性</h2><p>顺序一致性是一种理论参考模型，在设计的时候作为参照。</p>
+<h3 id="数据竞争与顺序一致性"><a href="#数据竞争与顺序一致性" class="headerlink" title="数据竞争与顺序一致性"></a>数据竞争与顺序一致性</h3><p>当程序未正确同步时，就可能存在数据竞争。Java内存模型规范对数据竞争的定义如下：</p>
+<ul>
+<li>在一个线程中写一个变量</li>
+<li>在另一个线程读同一个变量</li>
+<li>而且写和读没有通过同步来排序</li>
+</ul>
+<p>当代码中包含数据竞争时，程序的执行往往产生违反直觉的结果。<strong>如果一个多线程程序能够正确同步，这个程序将是一个没有数据竞争的程序</strong>。</p>
+<p>JMM对正确同步的多线程程序的内存一致性做了如下保证：</p>
+<p>如果程序时正确同步的，程序的执行将具有顺序一致性——即程序的执行结果与理论上的顺序一致性内存模型的执行结果相同。</p>
+<h3 id="顺序一致性内存模型"><a href="#顺序一致性内存模型" class="headerlink" title="顺序一致性内存模型"></a>顺序一致性内存模型</h3><p>顺序一致性内存模型是一个被计算机科学家理想化的理论参考模型，为程序员提供了机枪的内存可见性保证。顺序一致性内存模型有两个特性：</p>
+<ul>
+<li>一个线程中的所有操作必须按照程序的顺序来执行</li>
+<li>（不管程序是否同步）所有线程都只能看到一个单一的操作执行顺序。在顺序一致性内存模型中，每个操作都必须原子执行且立刻对所有线程可见。</li>
+</ul>
+<p>但是JMM中没有这个保证。未同步程序在JMM中不但整体执行顺序是无序的，而且所有线程看到的操作执行顺序也可能不一致。比如当前线程写操作，但是没有刷新进内存中。其他线程看到的顺序就与当前线程不一致。</p>
+<h3 id="同步程序的顺序一致性效果"><a href="#同步程序的顺序一致性效果" class="headerlink" title="同步程序的顺序一致性效果"></a>同步程序的顺序一致性效果</h3><p>最前面的示例<code>ReorderExample</code>用锁来同步，看看正确同步的程序如何具有顺序一致性。</p>
+<p>示例代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SynchronizedExample</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> a = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">boolean</span> flag = <span class="keyword">false</span>;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">writer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        a = <span class="number">1</span>;</span><br><span class="line">        flag = <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">reader</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (flag) &#123;</span><br><span class="line">            <span class="keyword">int</span> i = a;</span><br><span class="line">            System.out.println(i);</span><br><span class="line">      	&#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>  假设A线程执行writer方法之后，B线程执行reader方法。这是一个正确同步的多线程程序。该程序的执行结果与顺序一致性模型中的执行结果相同。</p>
+<p>  顺序一致性模型中，所有操作完全按程序的顺序串行执行.而在JMM中，临界区内的代码可以重排序（由于happens-before中监视器的语义，临界区内的代码不允许溢出到临界区之外）JMM会在退出临界区和进入临界区这两个关键的时间点做一些特别处理，使得线程在这两个时间点具有与顺序一致性模型相同的内存视图。</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200716145806.png" alt="image-20200716145758510"></p>
+<p>JMM在具体实现上的基本方针为：在不改变程序执行结果的前提下，尽可能地为编译器和处理器地优化打开方便之门。</p>
+<h3 id="未同步程序的执行特性"><a href="#未同步程序的执行特性" class="headerlink" title="未同步程序的执行特性"></a>未同步程序的执行特性</h3><p>  对于未同步或未正确同步的多线程程序，JMM只提供最小安全性：<strong>线程执行时读取到的值，要么是之前某个线程写入的值，要么是默认值</strong>（0， null， false），JMM保证线程读操作读取到的值不会无中生有的冒出来。为了实现最小安全性，JVM在堆上分配对象时，首先会对内存空间进行清0，然后才会在上面分配对象（JVM内部会同步这两个操作）。因此，在已清零的内存空间分配对象时，域的默认初始化已经完成了。</p>
+<p>  JMM不保证未同步的执行结果与顺序一致性模型上的执行结果一致。因为如果想要保证执行结果的一直，JMM需要禁止大量的处理器和编译器的优化，对程序的执行性能有很大的影响。</p>
+<p>  <strong>未同步程序在两个模型中的执行特性有如下几个差异</strong></p>
+<ul>
+<li>顺序一致性模型保证单线程操作会按程序的顺序执行，而JMM不保证单线程内的操作会按程序的顺序执行。</li>
+<li>顺序一致性模型保证所有线程只能看到一致的操作执行顺序。而JMM不保证所有线程能看到一致的操纵执行顺序。</li>
+<li><strong>JMM不保证对64位的long型和double型变量的写操作具有原子性</strong>，而顺序一致性模型保证对所有的内存读/写操作都具有原子性</li>
+</ul>
+<p>第三个差异与处理器总线的工作机制密切相关。在计算机中，数据通过总线在处理器和内存之间传递。每次处理器和内存之间的数据传递都是通过一系列步骤来完成的，这一系列步骤称之为<strong>总线事务</strong>。总线事务包括<strong>读事务</strong>和<strong>写事务</strong>。总线会同步试图并发使用总线的事务。在一个处理器执行总线事务期间，总线会禁止其他的处理器和I/O设备执行内存的读/写。总线工作机制如下图：<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200716162905.png" alt="总线的工作机制"></p>
+<p>  如上图，总线就是将所有处理器对内存的访问以串行化的方式来执行。在任意时间点，最多只能有一个处理器可以访问内存。这个特性确保了单个总线事务之中的内存读、写操作具有原子性。</p>
+<p>  基于上面所说的，在一些32位处理器上，如果要求对64位数据进行写操作具有原子性，会有较大的开销。为了照顾这类处理器，Java语言规范鼓励但不强求JVM对64位的数据的写操作具有原子性。64位的数据可能被拆为两个32位的数据，但是这样会出现一些意想不到的问题，见下图：<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200716162913.png" alt="总线事务执行的时序图"></p>
+<p>  从JSR-133开始，仅仅只允许把一个64位long/double型变量的写操作拆分为两个32位的写操作来执行，任意的读操作都必须具有原子性。而JSR-133之前读操作是允许一个64位long/double型变量的拆分的。</p>
+<h2 id="volatile的内存语义"><a href="#volatile的内存语义" class="headerlink" title="volatile的内存语义"></a>volatile的内存语义</h2><p><img src="https://gitee.com/yovette/Images/raw/master/img/20200716170518.png" alt="image-20200716164943584"></p>
+<p><code>volatile</code>变量特性：</p>
+<ol>
+<li>可见性：对一个volatile变量的读，总是能看到任意线程对这个volatile变量最后的写入。</li>
+<li>原子性：对任意单个volatile变量的读写具有原子性，但类似于volatile++这种复合操作不具有原子性。</li>
+</ol>
+<h3 id="volatile读写建立的happens-befores关系"><a href="#volatile读写建立的happens-befores关系" class="headerlink" title="volatile读写建立的happens-befores关系"></a>volatile读写建立的<code>happens-befores</code>关系</h3><p>volatile对线程的内存可见性的影响比自身的特性更为重要。</p>
+<p>从JDK5开始，volatile读写可以实现线程之间的通信。</p>
+<p>从内存语义的角度来说，volatile的写-读与锁的释放-获取有相同的内存效果</p>
+<p>观察下面的volatile变量的示例代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">VolatileExample</span></span>&#123;</span><br><span class="line">    <span class="keyword">int</span> a = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">volatile</span> <span class="keyword">boolean</span> flag = <span class="keyword">false</span>;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">writer</span><span class="params">()</span></span>&#123;</span><br><span class="line">        a = <span class="number">1</span>;			<span class="comment">//1</span></span><br><span class="line">        flag = <span class="keyword">true</span>;	<span class="comment">//2</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">reader</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (flag) &#123;		<span class="comment">//3</span></span><br><span class="line">            <span class="keyword">int</span> i = a;	<span class="comment">//4</span></span><br><span class="line">            ...</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>假设线程A执行了writer()方法之后，线程B执行reader()方法。根据<code>happens-before</code>规则，这个过程建立的<code>happens-before</code>关系可以分为3类</p>
+<ol>
+<li>根据程序次序规则，1<code>happens-before</code>2;3<code>happens-before</code>4;</li>
+<li>根据volatile规则，2<code>happens-before</code>3;</li>
+<li>根据<code>happens-before</code>的传递性规则，1<code>happens-before</code>4;</li>
+</ol>
+<p>A线程写一个volatile变量后，B线程读同一个volatile变量，该volatile变量对B线程立刻可见。</p>
+<h3 id="volatile写-读内存语义"><a href="#volatile写-读内存语义" class="headerlink" title="volatile写-读内存语义"></a>volatile写-读内存语义</h3><p>写内存语义：当写一个volatile变量时，JMM会把该线程对应的本地内存中的共享变量值刷新到主内存。</p>
+<blockquote>
+<p>volatile的内存语义是通过内存屏障实现的</p>
+</blockquote>
+<p>读内存语义：当读一个volatile变量时，JMM会将该线程对应的本地缓存置为无效，线程接下来将从主内存中读取共享变量。</p>
+<h3 id="volatile内存语义的实现"><a href="#volatile内存语义的实现" class="headerlink" title="volatile内存语义的实现"></a>volatile内存语义的实现</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201018153317.png" alt="volatile重排序规则表"></p>
+<p>JMM对volatile读写采取了保守策略的内存屏障插入策略</p>
+<ul>
+<li>在每个volatile写操作的前面插入一个<code>StoreStore</code>屏障，每个写操作后面插入一个<code>StoreLoad</code>屏障</li>
+<li>在每个volatile读操作的前面插入一个<code>LoadLoad</code>屏障，每个读操作后面插入一个<code>LoadStore</code>屏障</li>
+</ul>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201018154059.png" alt="指令序列图"></p>
+<h3 id="JDK5为什么要增强volatile的内存语义？"><a href="#JDK5为什么要增强volatile的内存语义？" class="headerlink" title="JDK5为什么要增强volatile的内存语义？"></a>JDK5为什么要增强volatile的内存语义？</h3><p>JDK5以后volatile就支持了同步问题。这是因为旧的volatile虽然不允许volatile之间重排序，但允许volatile变量与普通变量重排序</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201018154839.png" alt="线程执行时序图"></p>
+<p>旧的内存模型中，当1和2之间没有数据依赖关系时，1和2就可能被重排序，其结果就是：B执行4时不一定能看到线程A在执行1时对共享变量的修改，很明显这是无法保证线程之间的通信安全的。为了提供一种比锁更轻量级的线程之间的通信机制，JSP-133专家组决定增强volatile的内存语义：严格限制编译器和处理器对volatile变量与普通变量的重排序，确保volatile的写读操作和锁的释放获取又相同的内存语义。</p>
+<h2 id="锁的内存语义"><a href="#锁的内存语义" class="headerlink" title="锁的内存语义"></a>锁的内存语义</h2><p>锁是Java并发编程中最重要的同步机制。锁除了让临界区互斥执行外，还可以让释放锁的线程向同一个锁的线程发送消息。</p>
+<p>即监视器锁规则：线程A释放了锁之后，线程B获取了同一个锁，这时A在释放锁之前所有可见的共享变量，在B获取同一个锁之后，将立刻变得对B线程可见</p>
+<h3 id="锁释放和获取的内存语义"><a href="#锁释放和获取的内存语义" class="headerlink" title="锁释放和获取的内存语义"></a>锁释放和获取的内存语义</h3><ul>
+<li>当线程释放锁时，JMM会把该线程对应的本地内存中的共享变量刷新到主内存中。</li>
+<li>当线程获取锁时，JMM会把线程对应的本地内存置为无效，强制从主内存中读取共享变量。</li>
+</ul>
+<p>当A线程释放锁，实质上是A向接下来获取锁的线程发出来消息；</p>
+<p>当B线程得到锁，实质上是B接受了之前某个线程发出的信息。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><h2 id="JDK5对旧内存模型的修补"><a href="#JDK5对旧内存模型的修补" class="headerlink" title="JDK5对旧内存模型的修补"></a>JDK5对旧内存模型的修补</h2><p>JSR-133对JDK5之前的就内存模型的修补主要有两个</p>
+<ul>
+<li>增强<code>volatile</code>语义。旧内存模型允许<code>volatile</code>变量与普通变量重排序。JSR-133限制了<code>volatile</code>与普通变量的重排序</li>
+<li>增强了<code>final</code>语义。旧内存模型多次读取同一个final变量的值可能会不相同。为此JSR-133为final增加了两个重排序规则。在保证final引用不会从构造函数内逸出的情况下，final具有了初始化安全性</li>
+</ul>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Java多线程(1) Java内存模型</p><p><a href="https://yoveuio.github.io/2021/04/26/Java/多线程/2 java内存模型/">https://yoveuio.github.io/2021/04/26/Java/多线程/2 java内存模型/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><a href="https://yoveuio.github.io"><p>yoveuio</p></a></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2021-04-26</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2021-04-26</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icon" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="fab fa-creative-commons"></i></a><a class="icon" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="fab fa-creative-commons-by"></i></a><a class="icon" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="recommend-area"><div class="recommend-post"><span class="is-size-6 has-text-grey has-mr-7"># 相关文章</span><br><span>  1.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/%E5%8F%8C%E9%87%8D%E9%94%81%E5%AE%9A%E5%92%8C%E5%BB%B6%E8%BF%9F%E5%88%9D%E5%A7%8B%E5%8C%96/" target="_blank">Java多线程(9) 双重锁定和延迟初始化</a><br></span><span>  2.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/JMM%20happens-before%E8%A7%84%E5%88%99/" target="_blank">Java多线程(6) happens-before规则</a><br></span><span>  3.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/Fork&amp;Join%E6%A1%86%E6%9E%B6/" target="_blank">Java多线程(10) Fork&amp;Join框架</a><br></span><span>  4.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/9%20Java%E5%B9%B6%E5%8F%91%E5%B7%A5%E5%85%B7%E7%B1%BB/" target="_blank">Java多线程(8) Java并发工具类</a><br></span><span>  5.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/8%20%E9%98%BB%E5%A1%9E%E9%98%9F%E5%88%97/" target="_blank">Java多线程(7) Java阻塞队列</a><br></span><span>  6.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/6%20final%E5%9F%9F%E7%9A%84%E5%86%85%E5%AD%98%E8%AF%AD%E4%B9%89/" target="_blank">Java多线程(5) Java final域的内存语义</a><br></span><span>  7.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/5%20%E9%94%81%E5%86%85%E5%AD%98%E8%AF%AD%E4%B9%89%E7%9A%84%E5%AE%9E%E7%8E%B0/" target="_blank">Java多线程(4) Java锁的内存语义</a><br></span><span>  8.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/4%20%E9%94%81/" target="_blank">Java多线程(3) Java锁</a><br></span></div></div><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/social-share.js/1.0.16/css/share.min.css"><div class="social-share"></div><script src="https://cdnjs.loli.net/ajax/libs/social-share.js/1.0.16/js/social-share.min.js"></script></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/3%20%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%9A%84%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86/"><i class="level-item fas fa-chevron-left"></i><span class="level-item">Java多线程(2) Java多线程底层原理</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/1%20%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%9A%84%E4%B8%80%E4%BA%9B%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D/"><span class="level-item">Java多线程(0) Java多线程的概念介绍</span><i class="level-item fas fa-chevron-right"></i></a></div></nav><!--!--><!--!--></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="is-flex is-mobile" href="#Java内存模型"><span>Java内存模型</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#Java内存模型的基础"><span>Java内存模型的基础</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#Java并发编程的两个关键性问题"><span>Java并发编程的两个关键性问题</span></a></li><li><a class="is-flex is-mobile" href="#Java内存模型的抽象结构"><span>Java内存模型的抽象结构</span></a></li><li><a class="is-flex is-mobile" href="#从源代码到指令序列的重排序"><span>从源代码到指令序列的重排序</span></a></li><li><a class="is-flex is-mobile" href="#并发编程模型的分类"><span>并发编程模型的分类</span></a></li><li><a class="is-flex is-mobile" href="#happens-before简介"><span>happens-before简介</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#重排序"><span>重排序</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#数据依赖性"><span>数据依赖性</span></a></li><li><a class="is-flex is-mobile" href="#as-if-serial语义"><span>as-if-serial语义</span></a></li><li><a class="is-flex is-mobile" href="#重排序对多线程的影响"><span>重排序对多线程的影响</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#顺序一致性"><span>顺序一致性</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#数据竞争与顺序一致性"><span>数据竞争与顺序一致性</span></a></li><li><a class="is-flex is-mobile" href="#顺序一致性内存模型"><span>顺序一致性内存模型</span></a></li><li><a class="is-flex is-mobile" href="#同步程序的顺序一致性效果"><span>同步程序的顺序一致性效果</span></a></li><li><a class="is-flex is-mobile" href="#未同步程序的执行特性"><span>未同步程序的执行特性</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#volatile的内存语义"><span>volatile的内存语义</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#volatile读写建立的happens-befores关系"><span>volatile读写建立的happens-befores关系</span></a></li><li><a class="is-flex is-mobile" href="#volatile写-读内存语义"><span>volatile写-读内存语义</span></a></li><li><a class="is-flex is-mobile" href="#volatile内存语义的实现"><span>volatile内存语义的实现</span></a></li><li><a class="is-flex is-mobile" href="#JDK5为什么要增强volatile的内存语义？"><span>JDK5为什么要增强volatile的内存语义？</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#锁的内存语义"><span>锁的内存语义</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#锁释放和获取的内存语义"><span>锁释放和获取的内存语义</span></a></li></ul></li></ul></li><li><a class="is-flex is-mobile" href="#总结"><span>总结</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#JDK5对旧内存模型的修补"><span>JDK5对旧内存模型的修补</span></a></li></ul></li></ul></div></div><style>.menu-list > li > a.is-active + .menu-list { display: block; }.menu-list > li > a + .menu-list { display: none; }</style><script src="/js/toc.js" defer></script></div><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426154026.jpg" alt="Yoveuio"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Yoveuio</p><p class="is-size-6 is-block">数据开发、后端开发</p><p class="is-size-6 is-flex justify-content-center"><i class="fas fa-map-marker-alt mr-1"></i><span>中国 湖南</span></p></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives"><p class="title">26</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories"><p class="title">8</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags"><p class="title">5</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="https://github.com/yoveuio" target="_blank" rel="noopener">关注我</a></div><div class="level is-mobile"><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Github" href="https://github.com/yoveuio"><i class="fab fa-github"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Weibo" href="https://weibo.com/yoveuio"><i class="fab fa-weibo"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Email" href="/yoveuioit@outlook.com"><i class="fa fa-envelope"></i></a></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">分类</h3><ul class="menu-list"><li><a class="level is-mobile is-marginless" href="/categories/java/"><span class="level-start"><span class="level-item">java</span></span><span class="level-end"><span class="level-item tag">11</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"><span class="level-start"><span class="level-item">多线程</span></span><span class="level-end"><span class="level-item tag">11</span></span></a></li></ul></li><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/"><span class="level-start"><span class="level-item">大数据</span></span><span class="level-end"><span class="level-item tag">6</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/"><span class="level-start"><span class="level-item">Spark</span></span><span class="level-end"><span class="level-item tag">6</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/Spark-Core/"><span class="level-start"><span class="level-item">Spark Core</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/Spark-SQL/"><span class="level-start"><span class="level-item">Spark SQL</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li></ul></li></ul></li><li><a class="level is-mobile is-marginless" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="level-start"><span class="level-item">计算机网络</span></span><span class="level-end"><span class="level-item tag">8</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E5%BA%94%E7%94%A8%E5%B1%82/"><span class="level-start"><span class="level-item">应用层</span></span><span class="level-end"><span class="level-item tag">3</span></span></a></li></ul></li></ul></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">标签</h3><div class="field is-grouped is-grouped-multiline"><div class="control"><a class="tags has-addons" href="/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"><span class="tag">多线程</span><span class="tag is-grey-lightest">11</span></a></div><div class="control"><a class="tags has-addons" href="/tags/Spark/"><span class="tag">Spark</span><span class="tag is-grey-lightest">6</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="tag">计算机网络</span><span class="tag is-grey-lightest">6</span></a></div><div class="control"><a class="tags has-addons" href="/tags/HTTP-%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="tag">HTTP,计算机网络</span><span class="tag is-grey-lightest">1</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C-HTTP/"><span class="tag">计算机网络,HTTP</span><span class="tag is-grey-lightest">1</span></a></div></div></div></div></div><div class="column-right-shadow is-hidden-widescreen"></div></div></div></div></section><footer class="footer"><div class="container"><div class="level"><div class="level-start"><a class="footer-logo is-block mb-2" href="/"><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153630.gif" alt="Yoveuio Blog" height="28"></a><p class="size-small"><span>&copy; 2021 yoveuio</span>  Powered by <a href="https://hexo.io/" target="_blank">Hexo</a> &amp; <a href="https://github.com/ppoffice/hexo-theme-icarus" target="_blank">Icarus</a> &amp; <a href="https://github.com/removeif/hexo-theme-amazing" target="_blank">Amazing</a> <br><span>© 版权说明：[本网站所有内容均收集于互联网或自己创作,<br />&nbsp;&nbsp;&nbsp;&nbsp;方便于网友与自己学习交流，如有侵权，请联系yoveuioit@outlook.com，立即处理]<br /></span><span><span id="statistic-times">loading...</span><script>function createTime(time) {
+            var n = new Date(time);
+            now.setTime(now.getTime() + 250),
+                days = (now - n) / 1e3 / 60 / 60 / 24,
+                dnum = Math.floor(days),
+                hours = (now - n) / 1e3 / 60 / 60 - 24 * dnum,
+                hnum = Math.floor(hours),
+            1 == String(hnum).length && (hnum = "0" + hnum),
+                minutes = (now - n) / 1e3 / 60 - 1440 * dnum - 60 * hnum,
+                mnum = Math.floor(minutes),
+            1 == String(mnum).length && (mnum = "0" + mnum),
+                seconds = (now - n) / 1e3 - 86400 * dnum - 3600 * hnum - 60 * mnum,
+                snum = Math.round(seconds),
+            1 == String(snum).length && (snum = "0" + snum),
+                document.getElementById("statistic-times").innerHTML = "❤️本站自 <strong>"+time.split(" ")[0].replace(/\//g,".")+"</strong> 已运行 <strong>" + dnum + "</strong> 天 <strong>" + hnum + "</strong> 小时 <strong>" + mnum + "</strong> 分 <strong>" + snum + "</strong> 秒！❤️";
+        }var now = new Date();setInterval("createTime('2021/04/26 00:00:00')", 250,"");</script><br></span></p></div><div class="level-end"><div class="field has-addons"><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Creative Commons" href="https://creativecommons.org/"><i class="fab fa-creative-commons"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/"><i class="fab fa-creative-commons-by"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Download on GitHub" href="https://github.com/removeif/hexo-theme-amazing"><i class="fab fa-github"></i></a></p></div></div></div></div></footer><script src="https://cdnjs.loli.net/ajax/libs/moment.js/2.22.2/moment-with-locales.min.js"></script><script src="https://cdnjs.loli.net/ajax/libs/clipboard.js/2.0.4/clipboard.min.js" async></script><script>moment.locale("zh-CN");</script><script>var IcarusThemeSettings = {
+            article: {
+                highlight: {
+                    clipboard: true,
+                    fold: 'unfolded'
+                }
+            }
+        };</script><script src="/js/column.js"></script><script src="/js/animation.js"></script><a id="back-to-top" title="回到顶端" href="javascript:;"><i class="fas fa-chevron-up"></i></a><script src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><script src="https://cdnjs.loli.net/ajax/libs/lightgallery/1.6.8/js/lightgallery.min.js" defer></script><script src="https://cdnjs.loli.net/ajax/libs/justifiedGallery/3.7.0/js/jquery.justifiedGallery.min.js" defer></script><script>window.addEventListener("load", () => {
+            if (typeof $.fn.lightGallery === 'function') {
+                $('.article').lightGallery({ selector: '.gallery-item' });
+            }
+            if (typeof $.fn.justifiedGallery === 'function') {
+                if ($('.justified-gallery > p > .gallery-item').length) {
+                    $('.justified-gallery > p > .gallery-item').unwrap();
+                }
+                $('.justified-gallery').justifiedGallery();
+            }
+        });</script><!--!--><!--!--><!--!--><script src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script src="/js/insight.js" defer></script><script>document.addEventListener('DOMContentLoaded', function () {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        });</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.js"></script><script type="text/javascript">var pjax = new Pjax({
+            elements: "a",//代表点击链接就更新
+            selectors: [  //代表要更新的节点
+                ".section",
+                "title"
+            ],
+            cache: true,
+            cacheBust:false
+        })
+
+        function loadBusuanzi(){
+        $.getScript("//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js", function () {});
+        }
+
+        function loadMathJax() { //加载mathjax
+            $.getScript("//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_CHTML", function () {
+                MathJax.Hub.Config({ tex2jax: { inlineMath: [['$', '$'], ['\(', '\)']] } });
+                var math = document.getElementsByClassName("entry-content")[0];
+                MathJax.Hub.Queue(["Typeset", MathJax.Hub, math]);
+            });
+        };
+
+        // 开始 PJAX 执行的函数
+        document.addEventListener('pjax:send', function () {
+        });
+        
+        // PJAX 完成之后执行的函数，可以和上面的重载放在一起
+        document.addEventListener('pjax:complete', function () {
+            $(".section").css({opacity:1});
+            if(false){
+                $.getScript('/js/comment-issue-data.js',function(){loadIssueData('undefined','undefined','undefined','undefined',undefined);});
+            }
+            if(false){
+                loadMathJax();
+            }
+            loadMainJs(jQuery, window.moment, window.ClipboardJS, window.IcarusThemeSettings);
+            loadBackTop();
+            loadBusuanzi();
+            if(typeof loadBanner == 'function'){
+                loadBanner();
+            }
+        });</script></body></html>

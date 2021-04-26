@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>Spark#2 RDD编程(上)</title>
+    <title>Spark(2) RDD编程(上)</title>
     <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/RDD%E7%BC%96%E7%A8%8B%E4%B8%8A/</url>
-    <content><![CDATA[<h1 id="RDD编程的概念"><a href="#RDD编程的概念" class="headerlink" title="RDD编程的概念"></a>RDD编程的概念</h1><h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>每个Spark程序都包含一个运行<code>main()</code>方法的驱动程序，这个驱动程序能够在集群多个节点上并行操作。Spark提供了一种叫做<code>resilient distribute dataset(RDD)</code>的抽象，这个结构是在节点上运行程序的数据集合(程序)。RDD能由Hadoop文件系统中的文件初始化得到，也可以由驱动程序中的Scala集合转化得到。用户可以将RDD集合保存在内存中，这样可以让Spark程序高效的重用多个并行程序，减少以前Hadoop处理复杂业务出现的问题(Hadoop<code>Map-Reduce</code>过程后会将结果存在硬盘，导致如果需要多个Reduce过程的情景时出现大量磁盘IO，性能下降严重)。RDD也能将数据从故障节点中恢复。</p>
-<p>Spark还能让并行程序之间共享变量。默认情况下，Spark在集群中的不同节点上运行一个function来执行一组任务，它会向所有节点发送一个变量副本。如果一个变量需要被多个任务或者任务与驱动程序之间共享，Spark支持两种方式共享变量：<code>broadcast variables</code>(广播变量，在每个节点的内存中缓存一个值)和<code>accumulators</code>(累加器，仅仅允许变量执行加法，比如计数器和算术和)</p>
-<p>本章将会演示Scala完成这些功能</p>
+    <content><![CDATA[<p>弹性分布式数据集（RDD）是Spark的一种基本数据结构。它是一个不可变的分布式对象集合。RDD中的每个数据集被划分为逻辑分区，这些分区可以在集群的不同节点上计算。RDD可以包含任何类型的Python、Java或Scala对象，包括用户定义的类</p>
 <span id="more"></span>
 
+<h1 id="RDD编程的概念"><a href="#RDD编程的概念" class="headerlink" title="RDD编程的概念"></a>RDD编程的概念</h1><h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>每个Spark程序都包含一个运行<code>main()</code>方法的驱动程序，这个驱动程序能够在集群多个节点上并行操作。Spark提供了一种叫做<code>resilient distribute dataset(RDD)</code>的抽象，这个结构是在节点上运行程序的数据集合(程序)。RDD能由Hadoop文件系统中的文件初始化得到，也可以由驱动程序中的Scala集合转化得到。用户可以将RDD集合保存在内存中，这样可以让Spark程序高效的重用多个并行程序，减少以前Hadoop处理复杂业务出现的问题(Hadoop<code>Map-Reduce</code>过程后会将结果存在硬盘，导致如果需要多个Reduce过程的情景时出现大量磁盘IO，性能下降严重)。RDD也能将数据从故障节点中恢复。</p>
+<p>Spark还能让并行程序之间共享变量。默认情况下，Spark在集群中的不同节点上运行一个function来执行一组任务，它会向所有节点发送一个变量副本。如果一个变量需要被多个任务或者任务与驱动程序之间共享，Spark支持两种方式共享变量：<code>broadcast variables</code>(广播变量，在每个节点的内存中缓存一个值)和<code>accumulators</code>(累加器，仅仅允许变量执行加法，比如计数器和算术和)</p>
+<p>本章将会演示Scala完成这些功能</p>
 <h2 id="编程"><a href="#编程" class="headerlink" title="编程"></a>编程</h2><h3 id="连接Spark准备环境"><a href="#连接Spark准备环境" class="headerlink" title="连接Spark准备环境"></a>连接Spark准备环境</h3><p>本章通过<code>spark-shell</code>进行简单的API讲解</p>
 <h4 id="导入依赖包"><a href="#导入依赖包" class="headerlink" title="导入依赖包"></a>导入依赖包</h4><p>在正式开始写代码之前，我们需要导入需要的包。可以在spark项目下的<code>build.sbt</code>文件中导入以下依赖包：</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="comment">// https://mvnrepository.com/artifact/org.apache.spark/spark-core</span></span><br><span class="line">libraryDependencies += <span class="string">&quot;org.apache.spark&quot;</span> %% <span class="string">&quot;spark-core&quot;</span> % <span class="string">&quot;3.1.1&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// https://mvnrepository.com/artifact/org.apache.spark/spark-sql</span></span><br><span class="line">libraryDependencies += <span class="string">&quot;org.apache.spark&quot;</span> %% <span class="string">&quot;spark-sql&quot;</span> % <span class="string">&quot;3.1.1&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-client</span></span><br><span class="line"><span class="comment">// 如果你需要使用HDFS集群，导入下面这个包。需要提前配置Hadoop</span></span><br><span class="line">libraryDependencies += <span class="string">&quot;org.apache.hadoop&quot;</span> % <span class="string">&quot;hadoop-client&quot;</span> % <span class="string">&quot;3.3.0&quot;</span></span><br></pre></td></tr></table></figure>
@@ -114,12 +115,12 @@
       </tags>
   </entry>
   <entry>
-    <title>Spark#3 RDD编程(下)</title>
+    <title>Spark(3) RDD编程(下)</title>
     <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/RDD%E7%BC%96%E7%A8%8B%E4%B8%8B/</url>
-    <content><![CDATA[<h1 id="RDD操作"><a href="#RDD操作" class="headerlink" title="RDD操作"></a>RDD操作</h1><p>本文主要讲解RDD的相关操作</p>
+    <content><![CDATA[<p>了解了RDD的相关概念之后，本文将讲解常见的几种RDD操作</p>
 <span id="more"></span>
 
-<h2 id="键值对操作"><a href="#键值对操作" class="headerlink" title="键值对操作"></a>键值对操作</h2><p>虽然大多数的Spark操作可以在包含任何类型的RDD上运行，但有一些特殊操作仅在键值对的RDD上可用。最常见的是<code>shuffle</code>操作，例如根据键对元素进行分组和聚合。</p>
+<h1 id="RDD操作"><a href="#RDD操作" class="headerlink" title="RDD操作"></a>RDD操作</h1><h2 id="键值对操作"><a href="#键值对操作" class="headerlink" title="键值对操作"></a>键值对操作</h2><p>虽然大多数的Spark操作可以在包含任何类型的RDD上运行，但有一些特殊操作仅在键值对的RDD上可用。最常见的是<code>shuffle</code>操作，例如根据键对元素进行分组和聚合。</p>
 <p>在Scala中，这些操作可以顺其自然的在包含<code>Tuple2</code>对象的RDD上操作</p>
 <blockquote>
 <p>这个Tuple2是只包含两个元素的Tuple对象。可以简单的理解成C++中的pair。</p>
@@ -222,13 +223,16 @@
       </tags>
   </entry>
   <entry>
-    <title>Spark#1 第一个Spark程序</title>
+    <title>Spark(1) 第一个Spark程序</title>
     <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/Spark%E5%85%A5%E9%97%A8/</url>
-    <content><![CDATA[<h1 id="Spark入门"><a href="#Spark入门" class="headerlink" title="Spark入门"></a>Spark入门</h1><blockquote>
-<p>笔者水平有限，结合官方文档，并加入自己编程时的。如有疑惑可以参阅官方文档：<a href="https://spark.apache.org/docs/latest/quick-start.html">https://spark.apache.org/docs/latest/quick-start.html</a></p>
-</blockquote>
+    <content><![CDATA[<p>准备环境搭建成功，开始大数据界的<code>Hello World</code>吧</p>
 <span id="more"></span>
 
+
+
+<h1 id="Spark入门"><a href="#Spark入门" class="headerlink" title="Spark入门"></a>Spark入门</h1><blockquote>
+<p>笔者水平有限，结合官方文档，并加入自己编程时的。如有疑惑可以参阅官方文档：<a href="https://spark.apache.org/docs/latest/quick-start.html">https://spark.apache.org/docs/latest/quick-start.html</a></p>
+</blockquote>
 <h2 id="Spark-Shell编程"><a href="#Spark-Shell编程" class="headerlink" title="Spark Shell编程"></a>Spark Shell编程</h2><p>Spark shell是一个强大的交互式分析数据的工具，为我们学习Spark API提供了一种简单易行的学习方法。调用下面这条指令开始Scala编程：</p>
 <figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">./bin/spark-shell</span><br></pre></td></tr></table></figure>
 
@@ -389,13 +393,14 @@
       </tags>
   </entry>
   <entry>
-    <title>Spark#0 Spark准备环境</title>
+    <title>Spark(0) Spark准备环境</title>
     <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/%E5%87%86%E5%A4%87%E7%8E%AF%E5%A2%83/</url>
-    <content><![CDATA[<blockquote>
-<p>笔者水平有限，结合官方文档，并加入了自己编程时的理解。如有疑惑可以参阅官方文档：<a href="https://spark.apache.org/docs/latest/index.html">https://spark.apache.org/docs/latest/index.html</a></p>
-</blockquote>
+    <content><![CDATA[<p>正式学习之前，我们先将环境搭建起来。环境配置相对来说是比较简单的，但也有不少坑。</p>
 <span id="more"></span>
 
+<blockquote>
+<p>笔者水平有限，结合官方文档，并加入了自己编程时的理解。如有疑惑可以参阅官方文档：<a href="https://spark.apache.org/docs/latest/index.html">https://spark.apache.org/docs/latest/index.html</a></p>
+</blockquote>
 <h1 id="Spark单机环境的搭建"><a href="#Spark单机环境的搭建" class="headerlink" title="Spark单机环境的搭建"></a>Spark单机环境的搭建</h1><h2 id="前置工作"><a href="#前置工作" class="headerlink" title="前置工作"></a>前置工作</h2><p><strong>需要的知识储备</strong></p>
 <ol>
 <li>熟悉Java(至少要熟悉JVM)或者Python</li>
@@ -441,9 +446,79 @@
       </tags>
   </entry>
   <entry>
-    <title>Spark#5 Spark数据源</title>
+    <title>Spark(5) Spark数据源——通用加载/保存函数</title>
     <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/SparkSQL/%E6%95%B0%E6%8D%AE%E6%BA%90/</url>
-    <content><![CDATA[]]></content>
+    <content><![CDATA[<p>本文主要介绍Spark数据源的加载与保存有关的函数。通过一些库及其选项可以让数据源与DataFrame之间进行灵活的转换</p>
+<span id="more"></span>
+
+<h1 id="通用加载-保存函数"><a href="#通用加载-保存函数" class="headerlink" title="通用加载/保存函数"></a>通用加载/保存函数</h1><p>如果用户不另外配置<code>spark.sql.sources.default</code>，所有的操作将会使用默认数据源。</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> usersDF = spark.read.load(<span class="string">&quot;examples/src/main/resources/users.parquet&quot;</span>)</span><br><span class="line">scala&gt; usersDF.select(<span class="string">&quot;name&quot;</span>, <span class="string">&quot;favorite_color&quot;</span>).write.save(<span class="string">&quot;namesAndFavColors.parquet&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426163025.png"></p>
+<h2 id="手动指定选项"><a href="#手动指定选项" class="headerlink" title="手动指定选项"></a>手动指定选项</h2><p>用户可以手动设置选项来使用自己想要的数据源。数据源可以通过全限定名(i.e., <code>org.apache.spark.sql.parquet</code>)，也能通过使用简单名称的形式(<code>json</code>，<code>parquet</code>，<code>jdbc</code>，<code>orc</code>等等)。可以使用这种语法，将任意类型的数据源加载的<code>DataFrame</code>转换成其他类型。</p>
+<blockquote>
+<p>详情请参阅相关语言的API文档来获取可用选项。例如<code>org.apache.spark.sql.DataFrameReader</code>和<code>org.spark.sql.DataFrameWriter</code>。这些选项在非ScalaAPI中也可以可用的(例如：PySpark)。对于其他格式，阅读API文档可以了解</p>
+</blockquote>
+<p>例如，我们可以使用下面的形式来加载JSON文件</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> peopleDF = spark.read.format(<span class="string">&quot;json&quot;</span>).load(<span class="string">&quot;examples/src/main/resources/people.json&quot;</span>)</span><br><span class="line">scala&gt; peopleDF.select(<span class="string">&quot;name&quot;</span>, <span class="string">&quot;age&quot;</span>).write.format(<span class="string">&quot;parquet&quot;</span>).save(<span class="string">&quot;namesAndAges.parquet&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>还可以通过下面的形式加载CSV文件：</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> peopleDFCsv = spark.read.format(<span class="string">&quot;csv&quot;</span>)</span><br><span class="line">  .option(<span class="string">&quot;sep&quot;</span>, <span class="string">&quot;;&quot;</span>)</span><br><span class="line">  .option(<span class="string">&quot;inferSchema&quot;</span>, <span class="string">&quot;true&quot;</span>)</span><br><span class="line">  .option(<span class="string">&quot;header&quot;</span>, <span class="string">&quot;true&quot;</span>)</span><br><span class="line">  .load(<span class="string">&quot;examples/src/main/resources/people.csv&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>写操作也能使用选项。例如，我们能控制ORC数据源的bloom过滤器和字典编码。下面的例子就是对<code>favorite_color</code>创建一个bloom过滤器并使用字典编码。对于<code>Parquet</code>来说，也存在<code>parquet.enable.dictionary</code>。查看<code>Apache ORC/Parquet</code>可以查看<code>ORC/Parquet</code>的细节</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">usersDF.write.format(<span class="string">&quot;orc&quot;</span>)</span><br><span class="line">  .option(<span class="string">&quot;orc.bloom.filter.columns&quot;</span>, <span class="string">&quot;favorite_color&quot;</span>)</span><br><span class="line">  .option(<span class="string">&quot;orc.dictionary.key.threshold&quot;</span>, <span class="string">&quot;1.0&quot;</span>)</span><br><span class="line">  .option(<span class="string">&quot;orc.column.encoding.direct&quot;</span>, <span class="string">&quot;name&quot;</span>)</span><br><span class="line">  .save(<span class="string">&quot;users_with_options.orc&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<h2 id="保存模式"><a href="#保存模式" class="headerlink" title="保存模式"></a>保存模式</h2><p>Save操作可以选择<code>SaveMode</code>来指定如何处理现有数据。<strong>这些保存模式不使用任何锁定，也不是原子的</strong>。除此之外，当数据被<code>Overwrite</code>的时候，旧数据会在写入新数据之前被删除。</p>
+<table>
+<thead>
+<tr>
+<th>Scala/Java</th>
+<th>Any Language</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>SavaMode. ErrorIfExists</code>(default)</td>
+<td><code>“error” or “errorifexist&quot;</code></td>
+<td>当保存一个DataFrame到数据源中时，如果数据已经存在，会抛出异常</td>
+</tr>
+<tr>
+<td><code>SaveMode.Append</code></td>
+<td><code>“append&quot;</code></td>
+<td>当保存DataFrame到数据源时，如果数据已经存在，那么DataFrame中的内容会追加到现有数据的后面</td>
+</tr>
+<tr>
+<td><code>SaveMode.Overwrite</code></td>
+<td><code>“overwrite”</code></td>
+<td>如果数据已经存在，那么旧数据会被新数据覆盖</td>
+</tr>
+<tr>
+<td><code>SaveMode.Ignore</code></td>
+<td><code>“ignore”</code></td>
+<td>如果数据已经存在，<code>sava</code>操作将不会保存DataFrame中的任何数据，也不会改变现有的数据</td>
+</tr>
+</tbody></table>
+<h2 id="保存到持久表"><a href="#保存到持久表" class="headerlink" title="保存到持久表"></a>保存到持久表</h2><p>通过<code>saveAsTabel</code>命令，<code>DataFrame</code>能以持久表的方式保存到Hive中。使用这个功能不需要现有的Hive。Spark会创建本地Hive存储。与<code>CreateOrReplaceTempView</code>不通过，<code>saveAsTable</code>会物化DataFrame并创建一个指向Hive存储数据的指针。持久表在Spark重启之后也会存在。也可以使用<code>SparkSession.table()</code>方法将表转成DataFrame</p>
+<p>对于基于文件的数据源来说(如<code>text</code>，<code>parquet</code>，<code>json</code>等等)。通过path选项来指定表路径<code>df.write.option(&quot;path&quot;, &quot;/&#123;path&#125;).saveAsTable(&quot;t&quot;)&quot;</code>。当表被销毁，表路径不会被移出而表中的数据依旧存在。如果没有指定表路径，Spark将会向仓库目录下的默认表路径中写数据。当这里的表被销毁时，默认表路径也会被删除。</p>
+<p>从Spark 2.1开始，持久数据源的表Hive存储单元中存储了每个分区的元数据，这带来了下面几个好处</p>
+<ul>
+<li>元数据能够只返回查询的必要分区</li>
+<li>Datasource API可以使用Hive DDL(像<code>ALTER TABLE PARTITION ... SET LOCATION</code>)来创建表了</li>
+</ul>
+<p><strong>注意</strong>：在创建外部数据源表(使用了<code>path</code>选项)的时候，默认情况下不会收集分区信息。</p>
+<p>为了同步存储单元的分区信息，用户可以调用<code>MSCK REPAIR TABLE</code></p>
+<h2 id="Bucketing，Sorting-and-Partitioning"><a href="#Bucketing，Sorting-and-Partitioning" class="headerlink" title="Bucketing，Sorting and Partitioning"></a>Bucketing，Sorting and Partitioning</h2><p>对于基于文件的数据源，可以对输出进行<code>bucket</code>、<code>sort</code>和<code>partition</code>。Bucketing和Sorting可以被持久表使用</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; peopleDF.write.bucketBy(<span class="number">42</span>, <span class="string">&quot;name&quot;</span>).sortBy(<span class="string">&quot;age&quot;</span>).saveAsTable(<span class="string">&quot;people_bucketed&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>使用DataSet API的时候，<code>partitioning</code>能与<code>save</code>和<code>saveAsTable</code>一起使用。</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; usersDF.write.partitionBy(<span class="string">&quot;favorite_color&quot;</span>).format(<span class="string">&quot;parquet&quot;</span>).save(<span class="string">&quot;namesPartByColor.parquet&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426203242.png" alt="image-20210426203225756"></p>
+<p>对于单个表来说，也可以同时使用<code>partitioning</code>和<code>bucketing</code></p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line">scala&gt; usersDF.write.partitionBy(<span class="string">&quot;favorite_color&quot;</span>).bucketBy(<span class="number">42</span>, <span class="string">&quot;name&quot;</span>).saveAsTable(<span class="string">&quot;users_partitioned_bucketed&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p><code>partitionBy</code>创建了上面那种的目录结构。因此，它对具有高基数(重复值比较少)的列的适用性有限，相反，<code>bucketBy</code>可以将数据分发到固定数量的bucket中，能在唯一键的数量没有约束的情况下使用。</p>
+]]></content>
       <categories>
         <category>大数据</category>
         <category>Spark</category>
@@ -454,12 +529,12 @@
       </tags>
   </entry>
   <entry>
-    <title>Spark#4 Spark SQL概述</title>
+    <title>Spark(4) Spark SQL概述</title>
     <url>/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/SparkSQL/Spark%20SQL/</url>
-    <content><![CDATA[<h1 id="Spark-SQL概述"><a href="#Spark-SQL概述" class="headerlink" title="Spark SQL概述"></a>Spark SQL概述</h1><p>Spark SQL是用于结构化数据处理的Spark模块。与Spark RDD API不同，Spark SQL提供的接口可以为Spark提供更多的数据及其计算时的结构信息。Spark使用这些额外的信息实现一些优化。用户可以使用SQL或者Dataset API对SparkSQL进行操作。由于它和用户使用的API或者开发语言无关，这意味着开发人员可以在多个API中轻松地切换</p>
+    <content><![CDATA[<p>Spark SQL是用于结构化数据处理的Spark模块。与Spark RDD API不同，Spark SQL提供的接口可以为Spark提供更多的数据及其计算时的结构信息。Spark使用这些额外的信息实现一些优化。用户可以使用SQL或者Dataset API对SparkSQL进行操作。由于它和用户使用的API或者开发语言无关，这意味着开发人员可以在多个API中轻松地切换</p>
 <span id="more"></span>
 
-<h2 id="SQL"><a href="#SQL" class="headerlink" title="SQL"></a>SQL</h2><p>SparkSQL可以用来执行SQL查询，从一个Hive实例中查询数据。可以从<a href="https://spark.apache.org/docs/latest/sql-data-sources-hive-tables.html">Hive Tables - Spark 3.1.1 Documentation (apache.org)</a>中了解更多的配置。</p>
+<h1 id="Spark-SQL概述"><a href="#Spark-SQL概述" class="headerlink" title="Spark SQL概述"></a>Spark SQL概述</h1><h2 id="SQL"><a href="#SQL" class="headerlink" title="SQL"></a>SQL</h2><p>SparkSQL可以用来执行SQL查询，从一个Hive实例中查询数据。可以从<a href="https://spark.apache.org/docs/latest/sql-data-sources-hive-tables.html">Hive Tables - Spark 3.1.1 Documentation (apache.org)</a>中了解更多的配置。</p>
 <p>当使用另外一种编程语言中运行SQL时，结果将作为<code>Dataset/DataFrame</code>返回。也能使用命令行或者JDBC对SQL进行操作</p>
 <h2 id="Datasets和DataFrames"><a href="#Datasets和DataFrames" class="headerlink" title="Datasets和DataFrames"></a>Datasets和DataFrames</h2><p>dataset是分布式的数据集。Dataset在Spark1.6之后加入，结合了RDD的优点(强类型，lambda函数的能力)，和Spark SQL的优化执行引擎的优点。数据集能从JVM对象中创建，并使用<code>transformation</code>对其进行操作。python暂不支持Dataset API。但是由于python的动态特性，Dataset API的很多优点实际在python中可以体现。</p>
 <p>DataFrame是按列为名称构造的Dataset。它在概念上等价于关系型数据库或者R/Python中的视图，不过在引擎层面有着更加丰富的优化。DataFrame可以从各种各样的数据源中构建，例如：结构数据文件，Hive表，第三方数据库，或者是一个存在的RDD。DataDrameAPI可以供Scala、Java、Python、R使用。在Java或者Scala中，DataFrame是由Rows的Dataset来表示</p>
@@ -515,6 +590,1867 @@
       </categories>
       <tags>
         <tag>Spark</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>HTTP</title>
+    <url>/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/HTTP/</url>
+    <content><![CDATA[<p>HTTP Get和Post的区别</p>
+<span id="more"></span>
+
+<h2 id="HTTP-Get和Post的区别"><a href="#HTTP-Get和Post的区别" class="headerlink" title="HTTP Get和Post的区别"></a>HTTP Get和Post的区别</h2><p><strong>本质上说</strong>：两者没有区别，都是基于TCP/IP协议的实现，只不过是Http单方面的规范</p>
+<p><strong>对于实现来说</strong>：</p>
+<ul>
+<li>GET在浏览器回退时是无害的，而POST会再次提交请求。</li>
+<li>GET产生的URL地址可以被Bookmark，而POST不可以。</li>
+<li>GET请求会被浏览器主动cache，而POST不会，除非手动设置。</li>
+<li>GET请求只能进行url编码，而POST支持多种编码方式。</li>
+<li>GET请求参数会被完整保留在浏览器历史记录里，而POST中的参数不会被保留。</li>
+<li>GET请求在URL中传送的参数是有长度限制的，而POST没有。</li>
+<li>对参数的数据类型，GET只接受ASCII字符，而POST没有限制。</li>
+<li>GET比POST更不安全，因为参数直接暴露在URL上，所以不能用来传递敏感信息。</li>
+<li>GET参数通过URL传递，POST放在Request body中。</li>
+</ul>
+<p>🔺：GET产生一个TCP数据包；POST产生两个TCP数据包。</p>
+<p>长的说：</p>
+<p>对于GET方式的请求，浏览器会把http header和data一并发送出去，服务器响应200（返回数据）；</p>
+<p>而对于POST，浏览器先发送header，服务器响应100 continue，浏览器再发送data，服务器响应200 ok（返回数据）。</p>
+]]></content>
+      <categories>
+        <category>计算机网络</category>
+        <category>应用层</category>
+      </categories>
+      <tags>
+        <tag>HTTP,计算机网络</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>HTTS和HTTP</title>
+    <url>/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/HTTPS%E5%92%8CHTTP/</url>
+    <content><![CDATA[<p>HTTPS的原理</p>
+<span id="more"></span>
+
+<h1 id="基本概念"><a href="#基本概念" class="headerlink" title="基本概念"></a>基本概念</h1><p><code>HTTP(HyperText Transfer Protocol：超文本传输协议)</code>是一种用于分布式、协作式和超媒体信息系统的应用层协议。简单来说就是一种发布和接收HTML页面的方法，被用在Web浏览器和网站服务器之间传递信息。<strong>HTTP协议以明文方式发送内容</strong>，不提供任何方式的数据加密，如果攻击者截取了Web浏览器和网站服务器之间的传输报文，就可以直接读懂其中的信息。HTTP默认工作在TCP协议80端口。</p>
+<p><code>HTTPS(Hypertext Transfer Protocol Secure：超文本传输安全协议)</code>是一种透过计算机网络进行安全通信的传输协议。HTTPS经由HTTP进行通信，但利用SSL/TLS来加密数据报。HTTPS开发的主要目的是提供对网站服务器的身份认证，保护交换数据的隐私与完整性。</p>
+<p>本文主要就HTTPS作为介绍，HTTP的内容参见<code>计算机网络应用层一文</code>。</p>
+<h1 id="HTTPS的工作原理"><a href="#HTTPS的工作原理" class="headerlink" title="HTTPS的工作原理"></a>HTTPS的工作原理</h1><h2 id="HTTPS的工作流程"><a href="#HTTPS的工作流程" class="headerlink" title="HTTPS的工作流程"></a>HTTPS的工作流程</h2><p>HTTPS默认工作在TCP协议443端口，它的工作流程一般如以下方式：</p>
+<ol>
+<li>TCP三次同步握手</li>
+<li>客户端验证服务器数字证书</li>
+<li>DH算法协商对称加密算法的密钥、hash算法的密钥</li>
+<li>SSL安全加密隧道协商完成</li>
+<li>网页以加密的方式传输，用协商的对称加密算法和密钥加密，保证数据机密性；用协商的hash算法进行数据完整性保护，保证数据不被篡改</li>
+</ol>
+<h2 id="对称加密"><a href="#对称加密" class="headerlink" title="对称加密"></a>对称加密</h2><img src="https://gitee.com/yovette/Images/raw/master/img/20201127215208.jpg" alt="HTTPS对称密钥"  />
+
+<p>对称加密是指客户端和服务端都约定一个密钥，客户端发送的时候用这个密钥加密，服务端再解密</p>
+<p><strong><font style="color: #FF9966">这种方式的缺点是</font></strong></p>
+<ol>
+<li>客户端和服务器都要维护大量的密钥，造成资源浪费</li>
+<li>每个客户端和服务端的安全级别不同，密钥极易泄露</li>
+<li>不容易约定密钥</li>
+</ol>
+<h2 id="非对称加密"><a href="#非对称加密" class="headerlink" title="非对称加密"></a>非对称加密</h2><img src="https://gitee.com/yovette/Images/raw/master/img/20201127215051.jpg" alt="非对称加密"  />
+
+<p>客户端用公钥对请求内容加密，服务器用私钥对内容解密。</p>
+<p><strong><font style="color: #FF9966">这种方式依旧存在缺点</font></strong></p>
+<ol>
+<li>公钥是公开的，所以私钥加密的信息，如果被黑客截获，其可以使用公钥进行解密</li>
+</ol>
+<h2 id="对称加密和非对称加密联合使用"><a href="#对称加密和非对称加密联合使用" class="headerlink" title="对称加密和非对称加密联合使用"></a>对称加密和非对称加密联合使用</h2><img src="https://gitee.com/yovette/Images/raw/master/img/20201127220000.jpg" alt="对称和非对称联合使用"  />
+
+<p>通过公私钥对对称密钥进行约定，但也存在一定问题：使用服务器给的公钥对后续约定的私钥进行加密，但无法保证从服务区获取的公钥，可能已经被黑客截取并且发了一个假的公钥。</p>
+<h2 id="数字证书"><a href="#数字证书" class="headerlink" title="数字证书"></a>数字证书</h2><p>也就是大名鼎鼎的SSL验证</p>
+<p>中间大量原理本文暂且不提，有兴趣自行百度，这里只说说客户端怎么验证数字证书。面试大概提一下下面以及前面的内容就行了</p>
+<p><strong><font style="color: #FF9966">浏览器验证证书的步骤</font></strong></p>
+<ol>
+<li>首先浏览器读取证书中的证书所有者、有效期等信息进行一一校验</li>
+<li>浏览器开始查找操作系统中已内置的受信任的证书发布机构CA，与服务器发来的证书中的颁发者CA比对，用于校验证书是否为合法机构颁发</li>
+<li>如果找不到，浏览器就会报错，说明服务器发来的证书是不可信任的。</li>
+<li>如果找到，那么浏览器就会从操作系统中取出 颁发者CA 的公钥，然后对服务器发来的证书里面的签名进行解密</li>
+<li>浏览器使用相同的hash算法计算出服务器发来的证书的hash值，将这个计算的hash值与证书中签名做对比</li>
+<li>对比结果一致，则证明服务器发来的证书合法，没有被冒充</li>
+<li>此时浏览器就可以读取证书中的公钥，用于后续加密了</li>
+</ol>
+<h1 id="HTTP与HTTPS区别"><a href="#HTTP与HTTPS区别" class="headerlink" title="HTTP与HTTPS区别"></a>HTTP与HTTPS区别</h1><ul>
+<li>HTTP明文传输，数据都是未加密的，安全性较差；HTTPS(SSL+HTTP)数据传输过程是加密的，安全性较好</li>
+<li>使用HTTPS协议需要到CA申请证书</li>
+<li>HTTP页面响应速度比HTTPS快，主要是因为HTTP使用TCP三次握手建立连接，只需要三个包，而HTTPS除了TCP的三个包，还要加上SSL握手需要的9个包</li>
+<li>HTTP和HTTPS使用的是完全不同的连接方式，用的端口也不一样，前者是80，后者是443</li>
+<li>HTTPS实际上就是建立在SSL/TLS之上的HTTP协议，所以，要比较HTTPS与HTTP要更消耗服务器资源</li>
+</ul>
+]]></content>
+      <categories>
+        <category>计算机网络</category>
+        <category>应用层</category>
+      </categories>
+      <tags>
+        <tag>计算机网络,HTTP</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>域名系统</title>
+    <url>/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E5%9F%9F%E5%90%8D%E7%B3%BB%E7%BB%9FDNS/</url>
+    <content><![CDATA[<p><code>域名系统DNS</code>是互联网的一种层次树状结构，并使用分布式的命名系统，<strong>用来把便于人们使用的机器名字转换成IP地址</strong>。DNS为互联网各种网络应用提供了核心服务。</p>
+<span id="more"></span>
+
+<h1 id="域名系统概述"><a href="#域名系统概述" class="headerlink" title="域名系统概述"></a>域名系统概述</h1><p><strong>DNS使大多数名字都在本地进行解析，仅少量解析需要互联网上通信</strong>。由于DNS是分布式系统，即使单个计算机出了故障，也不会妨碍整个DNS系统的正常运行。域名到IP地址的解析是由分布在互联网上的许多<code>域名服务器程序</code>共同完成的。域名服务器程序在专设的结点上运行，而人们也常把运行域名服务器程序的机器称为<code>域名服务器</code>。当一个应用进程需要把主机名解析为IP地址的时候，该应用进程就调用<code>解析程序</code>，并成为一个DNS用户，把<strong>待解析的域名放在DNS请求报文中，以UDP用户数据报方式发送给本地域名服务器</strong>。若本地域名服务器不能回答该请求，则此域名服务器就暂时称为DNS的另一个客户，并向其他域名服务器发出查询请求，直到能找到回答该请求的域名服务器为止。</p>
+<h1 id="互联网的域名结构"><a href="#互联网的域名结构" class="headerlink" title="互联网的域名结构"></a>互联网的域名结构</h1><p>任何一个连接在互联网主机或路由器都有一个唯一的层次结构的名字，即域名。域是名字空间中一个可被管理的划分。<strong>域还可以划分为子域，子域还可以继续划分为子域的子域</strong>，这样就形成了顶级域、二级域、三级域等等。</p>
+<p>域名只是个<strong>逻辑概念</strong>，并不代表计算机所在的物理地点。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201128200842.png" alt="互联网的域名空间"></p>
+<p>域名树的树叶就是单台计算机的名字，它不能继续往下划分子域了。</p>
+<h1 id="域名服务器"><a href="#域名服务器" class="headerlink" title="域名服务器"></a>域名服务器</h1><p>一个域名体系是抽象的。但具体实现域名系统则是使用分布式在各地的域名服务器。理论上讲，每一级的域名都有一个相对应的域名服务器，使所有的域名服务器构成和上面的树相似的结构。但这样做会使域名服务器的数量太多，使域名系统的运行效率降低。因此DNS就采用划分区的办法来解决这个问题。</p>
+<p>一个服务器所负责管辖的范围叫做<code>区</code>。各单位根据具体情况来划分自己管辖范围的区。但在一个区中的所有节点必须使能够连通的。每一个区设置相应的<code>权限域名服务器</code>，用以保存该区中所有主机的域名到IP地址的映射。总之，DNS服务器的管辖范围不适宜<code>域</code>为单位，而是以<code>区</code>为单位。<strong>区是DNS服务器实际管辖的范围。区可能等于或小于域，但一定不能大于域</strong>。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201128202327.png" alt="DNS划分区"></p>
+<p>当DNS域名服务器无法找到域名到IP地址的映射时，就会设法去找互联网上别的域名服务器进行解析。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201128202653.png" alt="树状结构的DNS域名服务器"></p>
+<p>从上图可以看出互联网上的DNS域名服务器也是按照层次安排的。每一个域名服务器都只对域名体系中的一部分进行管辖。根据域名服务器所起的作用，**<font style="color: #FFC0C9">可以把域名服务器划分为以下四种不同的类型</font>**：</p>
+<ol>
+<li><strong>根域名服务器</strong></li>
+<li><strong>顶级域名服务器</strong></li>
+<li><strong>权限域名服务器</strong></li>
+<li><strong>本地域名服务器</strong></li>
+</ol>
+<h2 id="根域名服务器"><a href="#根域名服务器" class="headerlink" title="根域名服务器"></a>根域名服务器</h2><p>根域名服务器是最高层次的域名服务器，也是最重要的域名服务器。所有根域名服务器都知道所有顶级域名服务器的域名和IP地址。<strong>根域名服务器是最重要的域名服务器，因为不管哪一个本地域名服务器，若要对互联网上任何一个域名进行解析，只要自己无法解析，就首先求助于根域名服务器</strong>。</p>
+<p>根域名服务器采用了任播技术，当DNS客户向某个根域名服务器的IP地址发出查询报文时，互联网上的路由器就能找到里这个DNS客户最近的一个根域名服务器。</p>
+<p>根域名服务器不直接把待查询的域名直接转换成IP地址，而是告诉本地域名服务器下一步应当找哪一个顶级域名服务器进行查询。</p>
+<h2 id="顶级域名服务器"><a href="#顶级域名服务器" class="headerlink" title="顶级域名服务器"></a>顶级域名服务器</h2><p><strong>负责管理在该顶级域名服务器注册的所有二级域名</strong>。当收到DNS查询请求时，就给出相应的回答(可能是最后的结果，也可能是下一步应当找的域名服务器的IP地址)</p>
+<h2 id="权限域名服务器"><a href="#权限域名服务器" class="headerlink" title="权限域名服务器"></a>权限域名服务器</h2><p>这就是前面所讲的负责一个区的域名服务器。当一个权限服务器还不能给出最后的查询回答时，就会告诉发出查询请求的DNS客户，下一步应当找哪一个权限域名服务器</p>
+<h2 id="本地域名服务器"><a href="#本地域名服务器" class="headerlink" title="本地域名服务器"></a>本地域名服务器</h2><p>本地域名服务器并不属于域名服务器层次结构，但<strong>它对域名系统非常重要，当一台主机发出DNS请求时，这个查询请求报文就发送给本地域名服务器</strong>。本地域名服务器离用户较近，一般不超过几个路由器的距离。当所要查询的主机也属于同一本地ISP时，该本地域名服务器立即救恩那个找到对应主机。</p>
+<p>为了保证域名服务器可靠性，DNS域名服务器把数据复制到几个域名服务器来保存，其中的一个是<code>主域名服务器</code>，其他都是<code>辅助域名服务器</code>。当主域名服务器出故障时，辅助域名服务器可以保证DNS的查询工作不会中断。</p>
+<p><strong><font style="color: #FFC0C9">注意两点：</font></strong></p>
+<ol>
+<li>主机向本地域名服务器一般采用递归查询。即本地域名服务器以DNS客户的身份查询</li>
+<li>本地域名服务器向根域名服务器的查询采用迭代查询。即还是本地域名服务器查询</li>
+</ol>
+<p>为了提高效率，许多本地域名服务器和主机中都有最近使用的域名的高速缓存，大多数网点不需要花费太多精力就能正确找到对应Ip地址</p>
+]]></content>
+      <categories>
+        <category>计算机网络</category>
+        <category>应用层</category>
+      </categories>
+      <tags>
+        <tag>计算机网络</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>数据链路层</title>
+    <url>/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E6%95%B0%E6%8D%AE%E9%93%BE%E8%B7%AF%E5%B1%82/</url>
+    <content><![CDATA[<p>数据链路层主要研究<strong>一台主机到另一台主机之间的通信</strong></p>
+<span id="more"></span>
+
+<h1 id="数据链路层"><a href="#数据链路层" class="headerlink" title="数据链路层"></a>数据链路层</h1><p><strong>信道两种类型</strong></p>
+<p>数据链路层的信道主要有以下两种类型：</p>
+<ul>
+<li><strong>点对点信道</strong>：这种信道使用一对一的点对点通信方式</li>
+<li><strong>广播信道</strong>：这种信道使用一对多的广播通信方式</li>
+</ul>
+<p>以及这两种信道使用的协议——<code>PPP协议</code>以及<code>CSMA/CD协议</code></p>
+<p><strong>数据链路层的三个基本问题</strong></p>
+<p><strong>封装成帧</strong>、<strong>透明传输</strong>、<strong>差错检测</strong></p>
+<p><strong>MAC地址</strong></p>
+<h1 id="点对点信道的数据链路层"><a href="#点对点信道的数据链路层" class="headerlink" title="点对点信道的数据链路层"></a>点对点信道的数据链路层</h1><h2 id="数据链路和帧"><a href="#数据链路和帧" class="headerlink" title="数据链路和帧"></a>数据链路和帧</h2><p><code>链路</code>是一条无源的点到点的物理线路</p>
+<p><code>数据链路</code>除了物理线路外，还必须有通信协议来控制这些数据的传输。若把实现了这些协议的硬件和软件加到链路上，就构成了数据链路。</p>
+<blockquote>
+<p>现在最常用的方法是使用适配器（即网卡）来实现这些协议的硬件和软件</p>
+<p>一般的适配器都包括了数据链路层和物理层这两层的功能。</p>
+</blockquote>
+<p><code>帧</code>是数据链路层传输的数据单位</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200813170214.png" alt="image-20200813170205403"></p>
+<h2 id="三个基本问题"><a href="#三个基本问题" class="headerlink" title="三个基本问题"></a>三个基本问题</h2><p>封装成帧、透明传输、差错控制</p>
+<h3 id="封装成帧"><a href="#封装成帧" class="headerlink" title="封装成帧"></a>封装成帧</h3><p>封装成帧就是在一段数据的前后分别添加首部和尾部，然后就构成了一个帧。确定帧的界限。</p>
+<p>首部和尾部的一个重要作用就是进行帧定界</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200813170758.png" alt="封装成帧"></p>
+<h3 id="透明传输"><a href="#透明传输" class="headerlink" title="透明传输"></a>透明传输</h3><p>如图，透明传输是指数据链路层要能够分辨帧的真正结束的位置</p>
+<img src="https://gitee.com/yovette/Images/raw/master/img/20200813170850.png" alt="透明传输"  />
+
+<p>如果数据部分包含结束符就会导致有效信息被丢弃。</p>
+<h4 id="解决方法"><a href="#解决方法" class="headerlink" title="解决方法"></a>解决方法</h4><ol>
+<li>为了避免这种情况出现，我们在数据链路层在数据种出现控制字符“SOH”或者“EOT”时，就插入一个转义字符“ESC”.</li>
+<li><code>字节填充</code>或<code>字符填充</code>——接收端的数据链路层在将数据送往网络层之前删除插入的转义字符</li>
+<li>如果转义字符也出现在数据当中，那么转义字符前面再插入一个转义字符</li>
+</ol>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200813171348.png" alt="image-20200813171347356"></p>
+<h3 id="差错控制"><a href="#差错控制" class="headerlink" title="差错控制"></a>差错控制</h3><p>在传输过程种可能会出现比特差错：1变成0，0变成1。</p>
+<p>在一段时间内，传输错误的比特占所传输比特总数的比率曾为误码率<code>BER</code>。</p>
+<h4 id="循环冗余检验"><a href="#循环冗余检验" class="headerlink" title="循环冗余检验"></a>循环冗余检验</h4><p>为了保证通信的准确度，在数据链路层传送的帧种，广泛使用了循环冗余检验<code>CRC</code>的检错技术</p>
+<p>在数据后面添加上的冗余码称为帧检验序列<code>FCS</code>。</p>
+<blockquote>
+<p>循环冗余检验CRC是一种常用的检错方法。而FCS是添加在数据后面冗余码，FCS可以用CRC这种方法得出，但CRC并非用来获得FCS的唯一方法</p>
+</blockquote>
+<p>接收端会对受到的每一帧进行CRC检验，如果检验出没有差错就接收，如果有差错，就丢弃。这种检测方法并不能确定究竟哪一个或哪几个比特出现了差错。即CRC只能做到<strong>无差错接受</strong>。如果需要<strong>可靠传输</strong>(发送什么就收到什么)就必须加上<strong>确认</strong>和<strong>重传</strong>机制</p>
+<h1 id="点对点协议PPP"><a href="#点对点协议PPP" class="headerlink" title="点对点协议PPP"></a>点对点协议PPP</h1><blockquote>
+<p>世界上使用最多的数据链路层协议就是点对点协议PPP</p>
+</blockquote>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200814144023.png" alt="点对点协议PPP"></p>
+<h2 id="PPP协议的组成"><a href="#PPP协议的组成" class="headerlink" title="PPP协议的组成"></a>PPP协议的组成</h2><p>PPP协议有三个组成部分：</p>
+<ul>
+<li>一个将<code>IP数据报封装到串行链路</code>的方法</li>
+<li><code>链路控制协议</code>：用来建立、配置和测试数据链路连接的协议</li>
+<li><code>一套网络控制协议NCP</code>：每一个协议支持不同的网络层协议</li>
+</ul>
+<h3 id="PPP协议的帧格式"><a href="#PPP协议的帧格式" class="headerlink" title="PPP协议的帧格式"></a>PPP协议的帧格式</h3><p><strong>标志字段</strong>是F=0x7E</p>
+<p><strong>地址字段</strong>A只置为0xFF。地址字段实际上不起作用</p>
+<p><strong>控制字段</strong>C通常置为0x03</p>
+<p><strong>PPP是面向字节的</strong>，所有PPP帧的长都是整数字节</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200814144814.png" alt="PPP协议的帧格式"></p>
+<h3 id="透明传输问题"><a href="#透明传输问题" class="headerlink" title="透明传输问题"></a>透明传输问题</h3><p>当PPP用在同步传输链路时，协议规定采用硬件来完成比特填充</p>
+<p>当PPP用在异步传输时，就是用一种特殊的字符填充法</p>
+<h2 id="PPP协议的工作状态"><a href="#PPP协议的工作状态" class="headerlink" title="PPP协议的工作状态"></a>PPP协议的工作状态</h2><p><img src="https://gitee.com/yovette/Images/raw/master/img/20200814161720.png" alt="PPP协议的工作状态"></p>
+<ul>
+<li>当用户拨号接入 ISP 时，路由器的调制解调器对拨号做出确认，并<strong>建立一条物理连接</strong>。</li>
+<li>PC 机向路由器<strong>发送一系列的 LCP 分组</strong>（封装成多个 PPP 帧）。</li>
+<li>这些分组及其响应选择一些 PPP 参数，和进行网络层配置，<strong>NCP 给新接入的 PC机分配一个临时的 IP 地址</strong>，使 PC 机成为因特网上的一个主机。</li>
+<li>通信完毕时，<strong>NCP 释放网络层连接，收回原来分配出去的 IP 地址</strong>。接着，LCP 释放数据链路层连接。最后释放的是物理层的连接。  </li>
+</ul>
+<h1 id="使用广播信道的数据链路层"><a href="#使用广播信道的数据链路层" class="headerlink" title="使用广播信道的数据链路层"></a>使用广播信道的数据链路层</h1><h2 id="局域网的数据链路层"><a href="#局域网的数据链路层" class="headerlink" title="局域网的数据链路层"></a>局域网的数据链路层</h2><h3 id="数据链路层的两个子层"><a href="#数据链路层的两个子层" class="headerlink" title="数据链路层的两个子层"></a>数据链路层的两个子层</h3><p>为了使数据链路层能更好地适应多种局域网标准，局域网地数据链路层被拆为两个子层：<code>逻辑链路控制LLC子层</code>和<code>媒体接入控制MAC子层</code></p>
+<p>不管采用何种协议地局域网对LLC子层都是透明的。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200814163814.png" alt="数据链路层的两个子层"></p>
+<p><strong>一般不考虑LLC子层</strong></p>
+<h3 id="适配器的作用"><a href="#适配器的作用" class="headerlink" title="适配器的作用"></a>适配器的作用</h3><p>网络接口板又称为通信适配器，或“网卡”。</p>
+<p>适配器的重要功能：</p>
+<ul>
+<li><strong>进行串行/并行转换</strong></li>
+<li><strong>对数据进行缓存</strong></li>
+<li><strong>在计算机的操作系统安装设备驱动程序</strong></li>
+<li><strong>实现以太网协议</strong></li>
+</ul>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200819154738.png" alt="image-20200819154729409"></p>
+<h2 id="共享信道的方法"><a href="#共享信道的方法" class="headerlink" title="共享信道的方法"></a>共享信道的方法</h2><p>在技术上通常有两种方案</p>
+<ul>
+<li><strong>静态划分信道</strong>。例如时分复用、码分复用、频分复用、波分复用等。用户只要分配到了信道就不会和其他用户发生冲突，但这种划分信道的方式代价较高，不适合局域网使用</li>
+<li><strong>动态媒体接入控制</strong>。又称为多点接入，其特点是信道并非在用户通信时固定分配给用户。这里有两类：<ul>
+<li><strong>随机接入</strong>。所有用户可以随机地发送消息，但如果有两个或更多地用户在同一时刻发送消息就会产生碰撞，导致这些用户发送都失败</li>
+<li><strong>受控接入</strong>。用户不能随机地发送消息而必须服从一些控制，例如不停地轮询信道状态</li>
+</ul>
+</li>
+</ul>
+<p>接下来将讨论使用最多地随机接入方式——<code>CSMA/CD</code></p>
+<h3 id="CSMA-CD协议"><a href="#CSMA-CD协议" class="headerlink" title="CSMA/CD协议"></a>CSMA/CD协议</h3><p>最初的以太网将许多计算机都连接到一根总线上。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200819154831.png" alt="image-20200819154825347"></p>
+<p>总线上每一个工作的计算机都能检测到B发送的数据信号，只有地址于<strong>数据帧首部写入的地址一致的计算机才能接受这个数据帧</strong>。实现来再广播特性的总线上一对一的通信。</p>
+<p>由于局域网信道的质量很好，因此差错的概率很小。以太网采用了<strong>灵活的无连接的工作方式</strong>和<strong>不对发送的数据帧进行编号，不要求对方发回确认</strong>两种重要的措施来加强通信的简便性。</p>
+<h4 id="以太网提供的服务"><a href="#以太网提供的服务" class="headerlink" title="以太网提供的服务"></a>以太网提供的服务</h4><ul>
+<li>以太网提供的服务是不可靠的交付</li>
+<li>当目的站收到有差错的数据帧时就丢弃此帧，除此之外什么都不做</li>
+<li>当高层重传时，以太网会将其当作一个新的数据帧</li>
+</ul>
+<h4 id="载波监听多点接入-碰撞检测CSMA-CD"><a href="#载波监听多点接入-碰撞检测CSMA-CD" class="headerlink" title="载波监听多点接入/碰撞检测CSMA/CD"></a>载波监听多点接入/碰撞检测CSMA/CD</h4><ul>
+<li><code>多点接入</code>：表示许多计算机以多点接入的方式连接在一根总线上。</li>
+<li><code>载波监听</code>：每一个站在发送数据之前会检测一下总线上是否有其他计算机在发送数据，如果有，则暂时不要发送数据，以免发生碰撞。</li>
+<li><code>碰撞检测</code>：计算机边发送数据边检测信道上的信号电压大小。当一个站检测到信号电压摆动值超过一定门限值时，就认为总线上至少有两个站同时发送数据，即发生碰撞。</li>
+</ul>
+<h4 id="电磁波在总线上的有限传播速率的影响"><a href="#电磁波在总线上的有限传播速率的影响" class="headerlink" title="电磁波在总线上的有限传播速率的影响"></a>电磁波在总线上的有限传播速率的影响</h4><img src="https://gitee.com/yovette/Images/raw/master/img/20200819161209.png" alt="image-20200819161208844" style="zoom: 67%;" />
+
+<h4 id="争用期"><a href="#争用期" class="headerlink" title="争用期"></a>争用期</h4><p>以太网的端到端往返时延2г称为争用期</p>
+<p>经过争用期这段时间还没有检测到碰撞，才能肯定这次发送不会发生碰撞</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200819162206.png" alt="image-20200819162204318"></p>
+<h4 id="最短有效帧"><a href="#最短有效帧" class="headerlink" title="最短有效帧"></a>最短有效帧</h4><p>以太网取51.2μs为争用期的长度。对于10Mb/s以太网，在争用期发送的数据为64字节</p>
+<p>因此，以太网规定最短有效帧长为64字节，凡是长度小于64字节的帧都是由于冲突而异常终止的无效帧。</p>
+<h4 id="强化碰撞"><a href="#强化碰撞" class="headerlink" title="强化碰撞"></a>强化碰撞</h4><p>当发送数据的站一旦发现发生了碰撞：</p>
+<ol>
+<li>立即停止发送数据</li>
+<li>继续发送若干比特的人为干扰信号，以便让所有用户都知道现在已经发生了碰撞</li>
+</ol>
+<h1 id="使用广播信道的以太网"><a href="#使用广播信道的以太网" class="headerlink" title="使用广播信道的以太网"></a>使用广播信道的以太网</h1><h2 id="使用集线器的星型拓扑"><a href="#使用集线器的星型拓扑" class="headerlink" title="使用集线器的星型拓扑"></a>使用集线器的星型拓扑</h2><p><img src="https://gitee.com/yovette/Images/raw/master/img/20200819163004.png" alt="image-20200819163003971"></p>
+<h2 id="集线器的一些特点"><a href="#集线器的一些特点" class="headerlink" title="集线器的一些特点"></a>集线器的一些特点</h2><ol>
+<li>使用集线器的局域网在物理上是一个星型网，但由于集线器使用电子器件来模拟实际电缆线的工作，因此整个系统仍像一个传统以太网那样运行，也就是说，<strong>使用集线器的以太网逻辑上仍是一个总线网，各站共享逻辑上的总线，使用的还是CSMA/CD协议</strong></li>
+<li>一个集线器有许多接口，一个集线器就像一个多借口的转发器</li>
+<li>集线器工作在物理层，每个接口仅仅简单地转发比特</li>
+<li>集线器采用专门的芯片进行自适应串音回波抵消。</li>
+</ol>
+<h1 id="以太网的MAC层"><a href="#以太网的MAC层" class="headerlink" title="以太网的MAC层"></a>以太网的MAC层</h1><p>在局域网中，硬件地址又称为物理地址，或者<code>MAC地址</code></p>
+<p>适配器有<strong>过滤功能</strong>，但适配器从受到一个MAC帧就先用硬件检查MAC帧中的目的地址，如果是发往本站的帧则收下，然后再进行其他的处理。否则就将此帧丢弃，不再进行其他的处理。发往本站的帧包含以下三种：</p>
+<ol>
+<li>单播帧：即收到的帧的MAC地址与本站的硬件地址相同</li>
+<li>广播帧：即发送给本局域网上所有站点的帧(全1地址)</li>
+<li>多播帧：即发送给本局域网上一部分站点的帧</li>
+</ol>
+<h2 id="MAC帧格式"><a href="#MAC帧格式" class="headerlink" title="MAC帧格式"></a>MAC帧格式</h2><p><img src="https://gitee.com/yovette/Images/raw/master/img/20200819164417.png" alt="image-20200819164416185"></p>
+<ul>
+<li>前同步码：使接收端和发送端的时钟同步</li>
+<li>类型：标志上一层使用哪种协议</li>
+</ul>
+<h3 id="无效的MAC帧"><a href="#无效的MAC帧" class="headerlink" title="无效的MAC帧"></a>无效的MAC帧</h3><ol>
+<li>帧的长度不是整数个字节</li>
+<li>用收到的帧检验序列FCS查出有差错</li>
+<li>受到的帧的MAC客户数据字段长度不在46~1500字节之间</li>
+</ol>
+]]></content>
+      <categories>
+        <category>计算机网络</category>
+      </categories>
+      <tags>
+        <tag>计算机网络</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>物理层</title>
+    <url>/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%89%A9%E7%90%86%E5%B1%82/</url>
+    <content><![CDATA[<p>物理层考虑怎么才能在连接各种计算机的传输媒体传输数据比特流，而不是指具体的传输媒体。用于物理层的</p>
+<p>协议也常称为**物理层规程(procedure)**。</p>
+<span id="more"></span>
+
+<h1 id="物理层"><a href="#物理层" class="headerlink" title="物理层"></a>物理层</h1><h2 id="物理层的主要任务"><a href="#物理层的主要任务" class="headerlink" title="物理层的主要任务"></a>物理层的主要任务</h2><p>物理层的主要任务是描述为确定与传输媒体的接口有关的一些特性：</p>
+<ul>
+<li><code>机械特性</code>：知名接口所用接线器的的形状和尺寸、引脚数目和排列、固定和锁定装置；</li>
+<li><code>电气特性</code>：指明在接口电缆的各条线上出现的电压的意义；</li>
+<li><code>功能特性</code>：指明某条线上出现的某一电平的电压的意义；</li>
+<li><code>过程特性</code>：指明对于不同功能的各种可能事件的出现顺序</li>
+</ul>
+<p>数据在通信线路上面一般都是串行传输，而计算机内部一般采用并行传输的方式。因此物理层还要完成传输方式的转换。</p>
+<h1 id="数据通信的基础知识"><a href="#数据通信的基础知识" class="headerlink" title="数据通信的基础知识"></a>数据通信的基础知识</h1><h2 id="数据通信系统的模型"><a href="#数据通信系统的模型" class="headerlink" title="数据通信系统的模型"></a>数据通信系统的模型</h2><p>一个数据通信系统可划分为三大部分，即源系统、传输系统和目的系统。如下图所示：</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200810205241.png" alt="image-20200810205230488"></p>
+<h3 id="源系统"><a href="#源系统" class="headerlink" title="源系统"></a>源系统</h3><ul>
+<li><code>源点</code>：源点设备产生要传输的数据，例如：计算机键盘输入的汉字、计算机产生输出的数字比特流。源点又称为<code>源站</code>，或<code>信源</code></li>
+<li><code>发送器</code>：通常传输系统传送过来的信号，并把它转换为能够被目的设备处理的信息。典型的接收器就是调制器，它把来自传输线路上的模拟信号进行解调。</li>
+</ul>
+<h3 id="目的系统"><a href="#目的系统" class="headerlink" title="目的系统"></a>目的系统</h3><ul>
+<li><code>接收器</code>：接收传输系统传送过来的信号。如解调器</li>
+<li><code>终点</code>：终点设备从接收器获取传送过来的数字比特流，然后把信息输出。终点又称为目的站，或信宿</li>
+</ul>
+<h3 id="一些常用术语"><a href="#一些常用术语" class="headerlink" title="一些常用术语"></a>一些常用术语</h3><ul>
+<li>消息：通信的目的就是传送消息</li>
+<li>数据：运送信息的实体</li>
+<li>模拟信号/连续信号</li>
+<li>数字信号/离散信号</li>
+</ul>
+<h3 id="关于信道的基本概念"><a href="#关于信道的基本概念" class="headerlink" title="关于信道的基本概念"></a>关于信道的基本概念</h3><ul>
+<li>单向通信/单工通信：只能有一个方向的通信而没有反方向的交互</li>
+<li>双向交替通信/半双工通信：不能同时交互信息</li>
+<li>双向同时通信/全双工通信：可以同时交互信息</li>
+</ul>
+<h3 id="调制"><a href="#调制" class="headerlink" title="调制"></a>调制</h3><p>来源于信源的信号称为<code>基带信号</code>，包含了太多的低频成分，许多信道无法传输这些低频的成分。为了解决这一问题，就必须对信号进行调制。</p>
+<p>调制可以分为两类：<code>基带调制</code>和<code>带通调制</code>。</p>
+<ul>
+<li>基带调制：仅对基带信号的波形进行变换，使其能与信道特性相适应，变换后的信号仍然是基带信号。由于基带调制是将一种数字信号转换为另一种数字信号，我们习惯称其为<code>编码</code></li>
+<li>带通调制：需要使用载波进行调制，把基带信号的频率范围搬移到较高的频段，并转换为模拟信号。经过载波调制后的信号被称为带通信号。</li>
+</ul>
+<h4 id="常用编码方式"><a href="#常用编码方式" class="headerlink" title="常用编码方式"></a>常用编码方式</h4><p><img src="https://gitee.com/yovette/Images/raw/master/img/20200811151443.png" alt="常用编码方式"></p>
+<h4 id="基本的带通调制方式"><a href="#基本的带通调制方式" class="headerlink" title="基本的带通调制方式"></a>基本的带通调制方式</h4><p><img src="https://gitee.com/yovette/Images/raw/master/img/20200811151605.png" alt="基本的带童调制方式"></p>
+<h3 id="信道的极限容量"><a href="#信道的极限容量" class="headerlink" title="信道的极限容量"></a>信道的极限容量</h3><p> 任何信道都不是理想的，不可能以高速率传播。当码元的传输速率过高，或信号传输的距离越远，或噪声干扰越大，或传输媒体质量越差，在接收端的波形的失真就越严重。</p>
+<p>从概念上讲，限制码元在信道上的传输速率的因素只有两个：</p>
+<h4 id="信道能够通过的频率范围"><a href="#信道能够通过的频率范围" class="headerlink" title="信道能够通过的频率范围"></a>信道能够通过的频率范围</h4><p><code>奈氏准则</code>：在任何信道中，码元传输的速率是有上限的，传输速率超过上限就会出现严重的码间串扰的问题，使接收端对码元的判决称为不可能。</p>
+<h4 id="信噪比"><a href="#信噪比" class="headerlink" title="信噪比"></a>信噪比</h4><p>噪声存在于所有的电子设备和通信设备中。由于噪声是随机产生的，它的瞬时值有时会很大。但这个影响是相对的。如果信号相对较强，那么噪声的影响就相对较小。因此信号的平均功率和噪声的平均功率之比，即信噪比就很重要。</p>
+<p><code>香农公式</code>说明信道的带宽或信道中的信噪比越大，信息的极限传输速率就越高。</p>
+<h1 id="物理层下面的传输媒体"><a href="#物理层下面的传输媒体" class="headerlink" title="物理层下面的传输媒体"></a>物理层下面的传输媒体</h1><p>传输媒体可以称为传输介质和传输媒体，也分为两大类：<code>导引型传输媒体</code>和<code>非导引型传输媒体</code>。</p>
+<h2 id="导引型传输媒体"><a href="#导引型传输媒体" class="headerlink" title="导引型传输媒体"></a>导引型传输媒体</h2><h3 id="1-双绞线"><a href="#1-双绞线" class="headerlink" title="1 双绞线"></a>1 双绞线</h3><p>双绞线是最常用的也是最古老的传输媒体，由两根互相绝缘的铜导线并排放在一起，然后用规则的方法绞合起来构成。绞合可减少对相邻导线的电磁干扰，常用作电话连接到电话交换机（称为用户线或用户环路）。</p>
+<p>模拟传输和数字传输都可以使用双绞线，其通信距离一般为几到几十公里。距离太长需要放大器（模拟传输）或中继器（数字传输）。导线越粗通信距离越远。</p>
+<p>为了提升双绞线抗电磁干扰的能力，可以在双绞线的外面再加上一层用金属丝编织成的屏蔽层，这就是<code>屏蔽双绞线</code>。</p>
+<h3 id="2-同轴电缆"><a href="#2-同轴电缆" class="headerlink" title="2 同轴电缆"></a>2 同轴电缆</h3><h3 id="3-光缆"><a href="#3-光缆" class="headerlink" title="3 光缆"></a>3 光缆</h3><h2 id="非导引型传输媒体"><a href="#非导引型传输媒体" class="headerlink" title="非导引型传输媒体"></a>非导引型传输媒体</h2><h3 id="短波通信-高频通信"><a href="#短波通信-高频通信" class="headerlink" title="短波通信(高频通信)"></a>短波通信(高频通信)</h3><p>主要靠电离层的反射，由于多径效应，一般采用短波无线电台传送数据时，都是低速传输。</p>
+<h3 id="无线电微波通信"><a href="#无线电微波通信" class="headerlink" title="无线电微波通信"></a>无线电微波通信</h3><p>在数据通信中占有重要地位，主要有<code>地面微波接力通信</code>和<code>卫星通信</code>。</p>
+<h1 id="信道复用技术"><a href="#信道复用技术" class="headerlink" title="信道复用技术"></a>信道复用技术</h1><p><img src="https://gitee.com/yovette/Images/raw/master/img/20200812155533.png" alt="复用"></p>
+<h2 id="频分复用"><a href="#频分复用" class="headerlink" title="频分复用"></a>频分复用</h2><p><code>频分复用</code>是指所有用户在同样的时间占用不同的带宽资源（这里的带宽是指频率带宽而不是数据的发送速率）。用户在分配到一定的频带之后，在通信过程种自始至终都占用这个频带。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200812161818.png" alt="频分复用"></p>
+<h2 id="时分复用"><a href="#时分复用" class="headerlink" title="时分复用"></a>时分复用</h2><p>时分复用是将时间划分为一段段登场的时分复用帧(<code>TDM帧</code>)</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200812162949.png" alt="时分复用"></p>
+<h2 id="波分复用"><a href="#波分复用" class="headerlink" title="波分复用"></a>波分复用</h2><p><img src="https://gitee.com/yovette/Images/raw/master/img/20200812163239.png" alt="波分复用"></p>
+<h2 id="码分多用"><a href="#码分多用" class="headerlink" title="码分多用"></a>码分多用</h2><p>各用户使用特殊挑选的不同码型，彼此不会干扰。</p>
+<p>每个站分配的码片序列不仅必须各不相同，并且还必须<strong>互相正交</strong>。在实际的系统中试试用伪随机码序列。</p>
+<p>任何一个码片向量和该码片向量自己的规格化内积都是1。</p>
+]]></content>
+      <categories>
+        <category>计算机网络</category>
+      </categories>
+      <tags>
+        <tag>计算机网络</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>网络通信的基本概念</title>
+    <url>/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1/</url>
+    <content><![CDATA[<h3 id="OSI参考模型"><a href="#OSI参考模型" class="headerlink" title="OSI参考模型"></a>OSI参考模型</h3><blockquote>
+<p>应用层：所有能产生网络流量的程序</p>
+<p>表示层：在传输之前是否进行加密或者压缩处理。处理一些基本信息：如何解码方法</p>
+<p>会话层：建立会话进行数据包的传输：查木马一般用这一层特性</p>
+<p>传输层：可靠传输 流量控制  不可靠传输（如不需要切割数据包）</p>
+<p>网络层：负责选择最佳路径 规划ip地址</p>
+<p>数据链路层：帧的开始与结束 透明传输 差错校验</p>
+<p>物理层：接口标准 电器标准 如何在物理链路传输更快的速度</p>
+</blockquote>
+<span id="more"></span>
+
+<h5 id="利用率"><a href="#利用率" class="headerlink" title="利用率"></a>利用率</h5><p>利用率有信道利用率与网络利用率两种</p>
+<p>令D<sub>0</sub>表示网络空闲时的时延, D表示网络当前的时延，那么在适当的假定条件下<br>$$<br>D=D_0\div(1-U)<br>$$</p>
+<h2 id="物理层"><a href="#物理层" class="headerlink" title="物理层"></a>物理层</h2><h3 id="2-1-物理层的基本概念"><a href="#2-1-物理层的基本概念" class="headerlink" title="2.1 物理层的基本概念"></a>2.1 物理层的基本概念</h3><p>==主要功能：完成相邻节点间二进制位流的透明传输（不用管实现）==</p>
+<p>DTE：数据终端设备（网络边缘部分）</p>
+<p>DCE：数据电路端接设备</p>
+<p><strong>物理层的四个特性</strong></p>
+<figure class="highlight tex"><table><tr><td class="code"><pre><span class="line">1、机械特性</span><br><span class="line">	指明接口所用接线器的形状和尺寸、引线数目和排列、固定和锁定装置等等</span><br><span class="line">2、电气特性</span><br><span class="line">	指明在接口电缆的各条线上出现的电压的范围</span><br><span class="line">3、功能特性</span><br><span class="line">	指明某条线上出现的某一电平的表示何种意义</span><br><span class="line">4、过程特性</span><br><span class="line">	指明对于不同功能的各种可能事件的出现顺序</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="2-2-数据通信的基础知识"><a href="#2-2-数据通信的基础知识" class="headerlink" title="2.2 数据通信的基础知识"></a>2.2 数据通信的基础知识</h3><p><strong>几个术语</strong></p>
+<figure class="highlight tex"><table><tr><td class="code"><pre><span class="line">数据（data）：运送数据的实体</span><br><span class="line">信号（signal）：数据在传输过程中电磁波的表示形式</span><br><span class="line">模拟信号（analog signal）：信号幅值是连续变化的信号</span><br><span class="line">数字信号（digital signal）：信号幅值是离散的，如用两种不同的电平去表示0、1比特序列的电压脉冲信号</span><br><span class="line">码元（code）：在使用时间域的波形表示数字信号时，代表不同离散数值的基本波形</span><br><span class="line">基带信号（baseband）：</span><br><span class="line">带通信号（band pass）：</span><br></pre></td></tr></table></figure>
+
+<p><strong>有关信号的几个基本概念</strong></p>
+<figure class="highlight tex"><table><tr><td class="code"><pre><span class="line">信号传输类型：</span><br><span class="line">	数字信号</span><br><span class="line">	模拟信号</span><br><span class="line">通信方式</span><br><span class="line">	串行通信</span><br><span class="line">	并行通信</span><br><span class="line">同步方式</span><br><span class="line">	异步通信</span><br><span class="line">		字节中中带了控制信息</span><br><span class="line">	同步通信</span><br></pre></td></tr></table></figure>
+
+<p><strong>数字基带信号调制成带通信号的原因</strong></p>
+<p>低频载波无法远距离传输</p>
+<blockquote>
+<p>如何将计算机产生的二进制基带信号调制成带通信号？</p>
+<p>选择正弦波或余弦波作为载波</p>
+<p>s(t)=Acos(2πft+Φ )</p>
+<p><strong>幅移键控</strong>（ASK）</p>
+<p>载波的幅值随基带数字信号变化</p>
+<p><strong>频移键控</strong>（FSK）</p>
+<p>载波的频率随基带数字信号变化</p>
+<p><strong>相移键控</strong>（PSK）</p>
+<p>载波的初始相位随基带数字信号变化</p>
+</blockquote>
+<blockquote>
+<p><strong>接收方：</strong></p>
+<p><strong>正交振幅调制</strong>（QAM）</p>
+</blockquote>
+<p><strong>信道的极限容量</strong></p>
+<p>数据率：指每秒发送的二进制位数</p>
+<p>码元速率（单位波特）：每秒发送的码元</p>
+<blockquote>
+<p>码元速率与数据率成正比</p>
+<p>任何实际的信道都不是理想的，在传输信号会产生各种失真以及带来多种干扰</p>
+</blockquote>
+<p>信道容量：信道能够无错误传输的最高数据率</p>
+<h5 id="奈氏准则"><a href="#奈氏准则" class="headerlink" title="奈氏准则"></a>奈氏准则</h5><p>理想条件下，为了避免码间串扰，码元的传输速率的上限值是2w</p>
+<p>设L为离散</p>
+<p>n<strong>C=2Wlog2L</strong></p>
+<h5 id="香农定理"><a href="#香农定理" class="headerlink" title="香农定理"></a>香农定理</h5><p>香农用信息论的理论推导出了带宽受限且有高斯白噪声干扰的信道的极限、无差错的信息传输速率</p>
+<p>极限传输速率：C=Wlog2(1+S/N)    b/s    W：信道宽度</p>
+<p>求信噪比常用分贝：dB=10log10(S/N)</p>
+<h5 id="码片序列"><a href="#码片序列" class="headerlink" title="码片序列"></a>码片序列</h5><p>如某站点使用：</p>
+<p>码片序列二进制码：1</p>
+<p>二进制码反码：0</p>
+<h5 id="码片序列的正交关系"><a href="#码片序列的正交关系" class="headerlink" title="码片序列的正交关系"></a>码片序列的正交关系</h5><p>令向量S代表站S的码片向量， 向量T代表T站码片向量</p>
+<p>如果两向量相乘为0， 则码片正交</p>
+<h5 id="PCM脉码调制"><a href="#PCM脉码调制" class="headerlink" title="PCM脉码调制"></a>PCM脉码调制</h5><h5 id="同步光纤网SONET"><a href="#同步光纤网SONET" class="headerlink" title="同步光纤网SONET"></a>同步光纤网SONET</h5><p>同步光纤网的各级始终都来自一个十分精准的时钟</p>
+<h5 id="同步数字信号"><a href="#同步数字信号" class="headerlink" title="同步数字信号"></a>同步数字信号</h5><h3 id="2-6-宽带接入技术"><a href="#2-6-宽带接入技术" class="headerlink" title="2.6 宽带接入技术"></a>2.6 宽带接入技术</h3><h5 id="xDSL技术"><a href="#xDSL技术" class="headerlink" title="xDSL技术"></a>xDSL技术</h5><p>数字技术对现有的模拟电话用户改造，使能够承载宽带业务</p>
+<h5 id="HFC网技术"><a href="#HFC网技术" class="headerlink" title="HFC网技术"></a>HFC网技术</h5><h5 id="FTTx技术"><a href="#FTTx技术" class="headerlink" title="FTTx技术"></a>FTTx技术</h5>]]></content>
+      <categories>
+        <category>计算机网络</category>
+      </categories>
+      <tags>
+        <tag>计算机网络</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java多线程(0) Java多线程的概念介绍</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/1%20%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%9A%84%E4%B8%80%E4%BA%9B%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D/</url>
+    <content><![CDATA[<p>本文介绍并发编程的一些概念</p>
+<span id="more"></span>
+
+<h2 id="并发编程的挑战"><a href="#并发编程的挑战" class="headerlink" title="并发编程的挑战"></a>并发编程的挑战</h2><p>并发编程是为了让程序运行得更快。但是并不是启动更多的线程就能让程序最大限度地并发执行。在编程程序的时候，我们会面临很多的挑战：上下文切换、线程死锁、以及硬件和软件的资源限制等问题，极大地影响我们的效率。</p>
+<h3 id="上下文切换"><a href="#上下文切换" class="headerlink" title="上下文切换"></a>上下文切换</h3><h4 id="概念说明"><a href="#概念说明" class="headerlink" title="概念说明"></a>概念说明</h4><p>即使是单核处理器也能支持多线程。这是因为CPU能够为每个线程分配<strong>CPU时间片</strong>来实现这个机制。时间片是CPU分配给各个线程的时间。这些时间片都非常地短，只能通过CPU不停地切换线程执行。</p>
+<p>CPU通过时间片分配算法来循环执行任务，当前任务执行一个时间片之后会切换到下一个任务。但是在切换前会保存上一个任务的状态，以便下次切换回这个任务时，可以加载这个任务的状态。</p>
+<p>任务从保存到再加载的过程就是一次上下文切</p>
+<p>换。</p>
+<p>上下文切换是需要消耗CPU资源的，过多的上下文切换反而会使得我们的程序运行速度下降。减少上下文切换成为必要</p>
+<h4 id="如何减少上下文切换"><a href="#如何减少上下文切换" class="headerlink" title="如何减少上下文切换"></a>如何减少上下文切换</h4><p>减少上下文切换的方法有如下几种 ：</p>
+<ul>
+<li><p><strong>无锁并发编程</strong>：多线程竞争锁时，会引起上下文切换，所以多线程处理数据时，可以用一些方法来避免使用锁，如将数据的ID按照Hash算法取模分段，不同的线程处理不同段的数据</p>
+</li>
+<li><p><strong>CAS算法</strong>：Java中的Atomic包使用CAS算法来更新数据，而不需要加锁</p>
+</li>
+<li><p><strong>使用最少的线程：</strong>避免创建不必要的线程</p>
+</li>
+<li><p><strong>协程</strong>：在单线程里实现多任务的调度，并在单线程里维持多个任务间的切换</p>
+</li>
+</ul>
+<h3 id="死锁"><a href="#死锁" class="headerlink" title="死锁"></a>死锁</h3><h4 id="什么是死锁"><a href="#什么是死锁" class="headerlink" title="什么是死锁"></a>什么是死锁</h4><p>锁是十分有用的工具，但是如果使用不慎，就会出现性能下降，甚至死锁。一般在一个线程拿到锁之后，陷入某种异常当中(如死循环)，没有将锁释放掉。另外一个线程去获取这个锁，必然就会在等待队列里。最后导致整个程序不可用。</p>
+<p>一旦出现死锁，业务是可以感知的。因为服务不能用了，那么只能通过查看dump线程得知到底是哪个线程出了问题。</p>
+<h4 id="避免死锁的常见方法"><a href="#避免死锁的常见方法" class="headerlink" title="避免死锁的常见方法"></a>避免死锁的常见方法</h4><ul>
+<li>避免一个线程同时获取多个锁</li>
+<li>避免一个线程在锁内同时占用多个资源，尽量保证每个锁只占用一个资源</li>
+<li>尝试使用定时锁，使用<code>lock.tryLock(timeout)</code>来替代使用内部锁机制</li>
+<li>对于数据库锁，加锁和解锁必须在一个数据库连接里，否则会出现解锁失败的情况</li>
+</ul>
+<h3 id="资源限制的挑战"><a href="#资源限制的挑战" class="headerlink" title="资源限制的挑战"></a>资源限制的挑战</h3><h4 id="什么是资源限制的挑战"><a href="#什么是资源限制的挑战" class="headerlink" title="什么是资源限制的挑战"></a>什么是资源限制的挑战</h4><p>资源限制是指在并发编程时，程序执行速度受限于计算机硬件资源或软件资源。例如服务器带宽只有2Mb/s，某个资源的下载速度是1Mb/s，系统启动10个线程下载资源，下载速度也无法突破2Mb/s。在并发编程时，需要考虑这些资源的限制。常见的硬件限制有：带宽的上传/下载速度，硬盘读写速度和CPU处理速度。软件资源限制有：数据库连接数、socket连接数等。</p>
+<h4 id="引发的问题"><a href="#引发的问题" class="headerlink" title="引发的问题"></a>引发的问题</h4><p>如果一些串行代码变为并发执行，因为资源限制导致实际上任然时串行执行。这个时候程序不仅不会加快执行，反而因为上下文切换和资源调度而变得更慢。</p>
+<h4 id="如何解决资源限制的问题"><a href="#如何解决资源限制的问题" class="headerlink" title="如何解决资源限制的问题"></a>如何解决资源限制的问题</h4><p>考虑使用集群并行执行程序。单机的资源有限制，就让程序在多机上运行。比如ODPS、Hadoop或者机子搭建服务器集群，不同的机器处理不同的数据。可以通过“数据ID%机器数”，计算一个机器编号，让对应机器处理这个数据。</p>
+<p>对于软件资源限制，可以考虑资源池复用。比如使用连接池将数据库和Socket连接进行复用，或者在调用对方webservice接口获取数据时，只建立一个连接。</p>
+<h4 id="在资源限制情况下进行并发编程"><a href="#在资源限制情况下进行并发编程" class="headerlink" title="在资源限制情况下进行并发编程"></a>在资源限制情况下进行并发编程</h4><p>我们可以根据不同的资源限制调整程序的并发度。</p>
+<h2 id="进程与线程之间的区别"><a href="#进程与线程之间的区别" class="headerlink" title="进程与线程之间的区别"></a>进程与线程之间的区别</h2><ol>
+<li>进程是对运行时程序的封装，是系统进行资源调度和分配的基本单位，实现了操作系统的并发</li>
+<li>线程是进程的子任务，是CPU调度和分派的基本单位，用于保证程序的实时性，实现进程内部的并发</li>
+<li>进程切换涉及到资源的切换，也就意味着牵扯到虚拟内存，也就是页表的切换。而且进程的上下文明显大于线程</li>
+</ol>
+<h3 id="进程之间通信的几种方式"><a href="#进程之间通信的几种方式" class="headerlink" title="进程之间通信的几种方式"></a>进程之间通信的几种方式</h3><ol>
+<li>管道及命名管道：管道可用于由亲缘关系的父子进程间的通信</li>
+<li>信号：信号是一种比较复杂的通信方式，用于通知接收进程某个事件已经发生</li>
+<li>消息队列：用于解决上面的信号量有限的缺点</li>
+<li>共享内存：开辟一块公共空间</li>
+<li>信号量：主要作为进程之间及同一种进程的不同进程之间的同步和互斥手段</li>
+<li>C/S模式——socket、RPC、RMI</li>
+</ol>
+<h3 id="线程之间的同步方式有四种"><a href="#线程之间的同步方式有四种" class="headerlink" title="线程之间的同步方式有四种"></a>线程之间的同步方式有四种</h3><ol>
+<li>互斥量 Synchronized/Lock<br>如互斥对象</li>
+<li>信号量 Semphare<br>PV操作，允许同一时刻多个线程访问线程间的资源</li>
+<li>事件 Wait/Notify<br>手动置位事件和自动置位事件</li>
+</ol>
+<blockquote>
+<p>Java中的信号量</p>
+<p>Semaphore控制多个线程同时对某个资源的访问。而Lock和sychronized是锁的互斥，一个资源只能一个线程访问。单个信号量可以实现互斥锁的功能。</p>
+<p>信号量用在多线程多任务的同步。一个线程完成了某个动作就通过信号量告诉别的线程，别的线程再进行某些动作。也就是说Semaphore不一定是锁定某个资源，而可能是流程上的概念。</p>
+</blockquote>
+<h3 id="线程独享资源"><a href="#线程独享资源" class="headerlink" title="线程独享资源"></a>线程独享资源</h3><ol>
+<li>程序计数器</li>
+<li>寄存器</li>
+<li>栈</li>
+<li>状态字</li>
+</ol>
+<p>进程共有的信息存放在基础南横控制块PCB中，线程独有的信息存放在线程控制块TCB中</p>
+<h3 id="线程和进程之间的重要区别"><a href="#线程和进程之间的重要区别" class="headerlink" title="线程和进程之间的重要区别"></a>线程和进程之间的重要区别</h3><p>从逻辑角度来看，多线程的意义在于一个应用程序中，<strong>有多个执行部分可以同时执行。但操作系统并没有将多个线程看做多个独立的应用，来实现进程的调度和管理以及资源分配</strong></p>
+]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java多线程(3) Java锁</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/4%20%E9%94%81/</url>
+    <content><![CDATA[<p>本章将借助ReentrantLock的源码，来分析锁内存语义的具体实现机制。</p>
+<span id="more"></span>
+
+<h1 id="为什么用Lock？"><a href="#为什么用Lock？" class="headerlink" title="为什么用Lock？"></a>为什么用Lock？</h1><h2 id="Lock接口提供了synchronized关键字不具备的主要特性"><a href="#Lock接口提供了synchronized关键字不具备的主要特性" class="headerlink" title="Lock接口提供了synchronized关键字不具备的主要特性"></a>Lock接口提供了<code>synchronized</code>关键字不具备的主要特性</h2><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>尝试非阻塞地获取锁</td>
+<td>当前线程尝试获取锁，如果这一时刻锁没有被其他线程获取到，则成功获取并持有锁</td>
+</tr>
+<tr>
+<td>能被中断地获取锁</td>
+<td>与<code>synchronized</code>不同，获取到锁的线程能够响应中断，当获取到锁的线程被中断时，中断异常将会被抛出，同时锁被释放</td>
+</tr>
+<tr>
+<td>超时获取锁</td>
+<td>在指定的截止时间之前获取锁，如果截止时间到了仍旧无法获取锁，则返回</td>
+</tr>
+</tbody></table>
+]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java多线程(4) Java锁的内存语义</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/5%20%E9%94%81%E5%86%85%E5%AD%98%E8%AF%AD%E4%B9%89%E7%9A%84%E5%AE%9E%E7%8E%B0/</url>
+    <content><![CDATA[<p>本章将借助ReentrantLock的源码，来分析锁内存语义的具体实现机制。</p>
+<span id="more"></span>
+
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ReentrantLockExample</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> a = <span class="number">0</span>;</span><br><span class="line">    Lock lock = <span class="keyword">new</span> ReentrantLock();</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">writer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        lock.lock();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            a++;</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            lock.unlock();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">reader</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        lock.lock();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">int</span> i = a;</span><br><span class="line">            System.out.println(i);</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            lock.unlock();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>ReentrantLock</code>的实现依赖于Java同步器框架<code>AbstractQueuedSynchronizer</code>(简称之为AQS)。AQS使用一个整形的volatile变量(命名为<code>state</code>)来维护同步状态，这个volatile变量是ReentrantLock内存语义实现的关键。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201018165720.png" alt="ReentrantLock的类图"></p>
+<h1 id="公平锁内存语义的实现"><a href="#公平锁内存语义的实现" class="headerlink" title="公平锁内存语义的实现"></a>公平锁内存语义的实现</h1><p><code>ReentrantLock</code>分为公平锁和非公平锁，我们首先分析公平锁。</p>
+<h2 id="公平锁的加锁"><a href="#公平锁的加锁" class="headerlink" title="公平锁的加锁"></a>公平锁的加锁</h2><p>使用公平锁时，加锁方法<code>lock()</code>调用轨迹如下：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">ReentrantLock:lock();</span><br><span class="line">FairSync:lock();</span><br><span class="line">AbstractQueuedSynchronizer:acquire(<span class="keyword">int</span> arg);</span><br><span class="line">ReentrantLock:tryAcquire(<span class="keyword">int</span> acquires)</span><br></pre></td></tr></table></figure>
+
+<p>在第四步开始真正的加锁。</p>
+<p>下面是该方法的源码:</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">final</span> <span class="keyword">boolean</span> <span class="title">tryAcquire</span><span class="params">(<span class="keyword">int</span> acquires)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//获取当前线程</span></span><br><span class="line">    <span class="keyword">final</span> Thread current = Thread.currentThread();</span><br><span class="line">    <span class="comment">//首先读volatile变量state</span></span><br><span class="line">    <span class="keyword">int</span> c = getState();</span><br><span class="line">    <span class="keyword">if</span> (c == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (!hasQueuedPredecessors() &amp;&amp;</span><br><span class="line">            compareAndSetState(<span class="number">0</span>, acquires)) &#123;</span><br><span class="line">            setExclusiveOwnerThread(current);</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (current == getExclusiveOwnerThread()) &#123;</span><br><span class="line">        <span class="keyword">int</span> nextc = c + acquires;</span><br><span class="line">        <span class="keyword">if</span> (nextc &lt; <span class="number">0</span>)</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> Error(<span class="string">&quot;Maximum lock count exceeded&quot;</span>);</span><br><span class="line">        setState(nextc);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到，加锁方法首先读<code>volatile</code>变量<code>state</code>。</p>
+<h2 id="公平锁的释放锁"><a href="#公平锁的释放锁" class="headerlink" title="公平锁的释放锁"></a>公平锁的释放锁</h2><p>在使用公平锁时，解锁方法<code>unlock()</code>调用轨迹而下：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">ReentrantLock:unlock();</span><br><span class="line">AbstractQueuedSynchronizer:release(<span class="keyword">int</span> arg);</span><br><span class="line">Sync:tryRelease(<span class="keyword">int</span> release);</span><br></pre></td></tr></table></figure>
+
+<p>第三步开始真正的释放锁，下面是该方法的源代码：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">final</span> <span class="keyword">boolean</span> <span class="title">tryRelease</span><span class="params">(<span class="keyword">int</span> releases)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> c = getState() - releases;</span><br><span class="line">    <span class="keyword">if</span> (Thread.currentThread() != getExclusiveOwnerThread())</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalMonitorStateException();</span><br><span class="line">    <span class="keyword">boolean</span> free = <span class="keyword">false</span>;</span><br><span class="line">    <span class="keyword">if</span> (c == <span class="number">0</span>) &#123;</span><br><span class="line">        free = <span class="keyword">true</span>;</span><br><span class="line">        setExclusiveOwnerThread(<span class="keyword">null</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    setState(c);</span><br><span class="line">    <span class="keyword">return</span> free;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>从上面源代码中可以看出，在释放锁的最后写<code>volatile</code>变量<code>state</code>。</p>
+<p>公平锁在释放锁的最后写volatile变量state，在获取锁时首先都这个volatile变量。根据volatile的happens-before规则，释放锁的线程在写volatile变量之前可见的共享变量，<strong>在获取锁的线程读取同一个volatile变量后将立刻变得对获取锁的线程可见。</strong></p>
+<h1 id="非公平锁的内存语义的实现"><a href="#非公平锁的内存语义的实现" class="headerlink" title="非公平锁的内存语义的实现"></a>非公平锁的内存语义的实现</h1><p>非公平锁的释放和公平锁完全一样，所以这里仅仅分析非公平锁的获取。使用非公平锁时，加锁方法<code>lock()</code>调用轨迹如下。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">ReentrantLock:lock();</span><br><span class="line">NonfairSync:lock();</span><br><span class="line">AbstractQueuedSynchronizer:compareAndSetState(<span class="keyword">int</span> expect, <span class="keyword">int</span> update);</span><br></pre></td></tr></table></figure>
+
+<p>在第三步开始真正的加锁，下面是该方法的源代码：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">final</span> <span class="keyword">boolean</span> <span class="title">compareAndSetState</span><span class="params">(<span class="keyword">int</span> expect, <span class="keyword">int</span> update)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// See below for intrinsics setup to support this</span></span><br><span class="line">    <span class="keyword">return</span> unsafe.compareAndSwapInt(<span class="keyword">this</span>, stateOffset, expect, update);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>该方法以原子操作的方式更新state变量，<code>compareAndSet</code>方法简称为CAS。接下来将从编译器和处理器的角度来分析，CAS如何同时具有<code>volatile</code>读和<code>volatile</code>写的内存语义。</p>
+<h2 id="CAS实现volatile内存语义"><a href="#CAS实现volatile内存语义" class="headerlink" title="CAS实现volatile内存语义"></a>CAS实现volatile内存语义</h2><blockquote>
+<p>前文回顾：编译器不会对volatile读后面的任意内存操作进行重排序；编译器不会对volatile写之前的任意操作进行重排序。组合这两个条件就意味着，编译器不能对CAS前后文进行任意内存操作的重排序</p>
+</blockquote>
+<p>下面是<code>sun.misc.Unsafe</code>类中的<code>compareAndSwapInt()</code>方法的源码</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">native</span> <span class="keyword">boolean</span> <span class="title">compareAndSwapInt</span><span class="params">(Object var1, <span class="keyword">long</span> var2, <span class="keyword">int</span> var4, <span class="keyword">int</span> var5)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>在处理器中，CAS操作是通过<code>cmpxchg</code>指令实现的。如果程序在多处理器上运行，就为<code>cmpxchg</code>指令加上lock前缀。反之，如果程序是在单处理器上运行，就省略lock前缀(单处理器自身会维护单处理器内顺序一致性，不需要lock前缀提供的内存屏障效果)。</p>
+<h2 id="lock前缀说明"><a href="#lock前缀说明" class="headerlink" title="lock前缀说明"></a>lock前缀说明</h2><ol>
+<li>确保内存的读改写操作原子执行(通过总线锁定和缓存锁定达成目标)</li>
+<li>禁止该指令，与之前和之后的读写指令重排序</li>
+<li>把写缓冲区的所有数据刷新到内存中</li>
+</ol>
+<p>2、3点所具有的内存屏障效果足以实现volatile的内存语义</p>
+<h1 id="锁内存语义总结"><a href="#锁内存语义总结" class="headerlink" title="锁内存语义总结"></a>锁内存语义总结</h1><ul>
+<li>公平锁和非公平锁释放时，最后都要写一个volatile变量<code>state</code></li>
+<li>公平锁获取时，首先会读volatile变量。</li>
+<li>非公平锁获取时，首先会用CAS更新volatile变量，这个操作同时具有volatile读和volatile写的内存语义。</li>
+</ul>
+<p>从本文对<code>ReentrantLock</code>的分析可以看出，锁释放-获取内存语义的实现至少有下面两种方式：</p>
+<ol>
+<li>利用<code>volatile</code>变量的写读所具有的内存语义</li>
+<li>利用CAS所附带的内存语义</li>
+</ol>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201019213612.png" alt="concurrent包实现示意图"></p>
+<p>实践表明，concurrent包高层都是基于这两种方式实现的。</p>
+]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java多线程(7) Java阻塞队列</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/8%20%E9%98%BB%E5%A1%9E%E9%98%9F%E5%88%97/</url>
+    <content><![CDATA[<p>阻塞队列是一个执行支持两个附加操作的队列。这两个附加的操作支持阻塞的插入和移除方法。</p>
+<span id="more"></span>
+
+<ol>
+<li>支持阻塞的插入方法：当队列满时，队列会阻塞插入元素的线程，直到队列不满</li>
+<li>支持阻塞的移除方法：当队列为空时，获取元素的线程会等待队列变为非空</li>
+</ol>
+<p>阻塞队列常用于生产者和消费者的场景，阻塞队列就是生产者存放元素，消费者消费元素的容器。</p>
+<p>在阻塞队列不可用时，这两个附加操作提供了4中处理方式：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>抛出异常</th>
+<th>返回特殊值</th>
+<th>一直阻塞</th>
+<th>超时退出</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>插入方法</td>
+<td><code>add(e)</code></td>
+<td><code>offer(e)</code></td>
+<td><code>put(e)</code></td>
+<td><code>offer(e, time , unit)</code></td>
+</tr>
+<tr>
+<td>移除方法</td>
+<td><code>remove</code></td>
+<td><code>poll()</code></td>
+<td><code>take()</code></td>
+<td><code>poll(time, unit)</code></td>
+</tr>
+<tr>
+<td>检查方法</td>
+<td><code>element()</code></td>
+<td><code>peek()</code></td>
+<td>不可用</td>
+<td>不可用</td>
+</tr>
+</tbody></table>
+<ul>
+<li><strong>抛出异常</strong>：当队列满时，如果往队列里插入元素，会抛出<code>ILLegalStateException(&quot;Queue full&quot;)</code>异常。当队列空时，从队列获取元素会抛出<code>NoSuchElementException</code>异常</li>
+<li><strong>返回特殊值</strong>：当往队列插入元素时，会返回元素是否插入成功，成功返回true。如果时移除方法，则是从队列里取出一个元素，如果没有返回null</li>
+<li><strong>一直阻塞</strong>：当阻塞队列满时，如果生产者线程往队列里put元素，队列会一直阻塞；队列为空时，如果消费者线程从队列里take元素，队列也会一直阻塞</li>
+<li><strong>超时退出</strong>：当阻塞队列满时，如果生产者线程往队列里插入元素，队列会阻塞一段实现，如果超过了时间就会退出</li>
+</ul>
+<blockquote>
+<p>如果是无界阻塞队列，队列不可能出现满的情况，所以使用put或offer方法永远不会被阻塞，使用offer方法是永远返回true</p>
+</blockquote>
+<h1 id="Java里的阻塞队列"><a href="#Java里的阻塞队列" class="headerlink" title="Java里的阻塞队列"></a>Java里的阻塞队列</h1><p>JDK7提供了7个阻塞队列：</p>
+<ul>
+<li>ArrayBlockingQueue：一个由数组结构组成的有界阻塞队列</li>
+<li>LinkedBlockingQueue：一个由链表结构组成的有界阻塞队列</li>
+<li>PriorityBlockingQueue：一个支持优先级排序的无界阻塞队列</li>
+<li>DelayQueue：一个使用优先级队列实现的无界阻塞队列</li>
+<li>SynchronousQueue：一个不存储元素的阻塞队列</li>
+<li>LinkedTransferQueue：一个由链表结构组成的无界阻塞队列</li>
+<li>LinkedBlockingDeque：一个由链表结构组成的双向阻塞队列</li>
+</ul>
+<h2 id="ArrayBlockingQueue"><a href="#ArrayBlockingQueue" class="headerlink" title="ArrayBlockingQueue"></a>ArrayBlockingQueue</h2><p><code>ArrayBlockingQueue</code>是一个用数组实现的有界阻塞队列。此队列按照先进先出(FIFO)的原则对元素进行排序</p>
+<p>默认情况下不保证线程公平的访问队列，所谓公平访问队列是指阻塞的线程，可以按照阻塞的先后顺序访问队列。即先阻塞线程先访问队列。为了保证公平性，通常会降低吞吐量</p>
+<p>下面是创建公平的阻塞队列的算法：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">ArrayBlockingQueue fairQueue = <span class="keyword">new</span> ArrayBlockingQueue(<span class="number">1000</span>, <span class="keyword">true</span>);</span><br></pre></td></tr></table></figure>
+
+<h2 id="LinkedBlockingQueue"><a href="#LinkedBlockingQueue" class="headerlink" title="LinkedBlockingQueue"></a>LinkedBlockingQueue</h2><p><code>LinkedBlockingQueue</code>是一个用链表实现的有界阻塞队列。此队列的默认和最大长度为<code>Integer.MAX_VALUE</code>。此队列按照先进先出的原则对元素进行排序</p>
+<h2 id="PriorityBlockingQueue"><a href="#PriorityBlockingQueue" class="headerlink" title="PriorityBlockingQueue"></a>PriorityBlockingQueue</h2><p><code>PriorityBlockingQueue</code>是一个支持优先级的无界阻塞队列。默认情况下元素采取自然顺序升序排列。也可以自定义实现<code>compareTo()</code>方法来指定元素排序规则，或者初始化<code>PriorityBlockingQueue</code>时，指定构造参数Comparator来对元素进行排序。需要注意的时不能保证同优先级元素的顺序</p>
+<h2 id="DelayQueue"><a href="#DelayQueue" class="headerlink" title="DelayQueue"></a>DelayQueue</h2><p><code>DelayQueue</code>是一个支持延时获取元素的无界阻塞队列。队列使用<code>PriorityQueue</code>实现。队列中的元素必须实现<code>Delayed</code>接口，在创建元素时可以指定多久才能从队列中获取当前元素。只有延迟期满时才能从队列中提取元素。只有在延迟期满时才能从队列中提取元素。</p>
+<p>DelayQueue非常有用，可以将DelayQueue运用在以下应用场景中</p>
+<ul>
+<li>缓存系统的设计：为缓存元素设置有效期</li>
+<li>定时任务调度：使用DelayQueue保存当天将会执行的任务和执行时间，一旦从DelayQueue中获取到任务就开始执行，比如<code>TimeQueue</code>就是使用<code>DelayQueue</code>实现的。</li>
+</ul>
+<h3 id="实现Delay接口"><a href="#实现Delay接口" class="headerlink" title="实现Delay接口"></a>实现Delay接口</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DelayQueueTester</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> DelayQueue&lt;DelayTask&gt; delayQueue = <span class="keyword">new</span> DelayQueue&lt;&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">DelayTask</span> <span class="keyword">implements</span> <span class="title">Delayed</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 延迟时间</span></span><br><span class="line">        <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">long</span> delay;</span><br><span class="line">        <span class="comment">// 到期时间</span></span><br><span class="line">        <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">long</span> expire;</span><br><span class="line">        <span class="comment">// 数据</span></span><br><span class="line">        <span class="keyword">private</span> <span class="keyword">final</span> String msg;</span><br><span class="line">        <span class="comment">// 创建时间</span></span><br><span class="line">        <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">long</span> now;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 初始化 DelayTask 对象</span></span><br><span class="line"><span class="comment">         *</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@param</span> delay 延迟时间 单位：微妙</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@param</span> msg   业务信息</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        DelayTask(<span class="keyword">long</span> delay, String msg) &#123;</span><br><span class="line">            <span class="keyword">this</span>.delay = delay; <span class="comment">// 延迟时间</span></span><br><span class="line">            <span class="keyword">this</span>.msg = msg; <span class="comment">// 业务信息</span></span><br><span class="line">            <span class="keyword">this</span>.now = Instant.now().toEpochMilli();</span><br><span class="line">            <span class="keyword">this</span>.expire = now + delay; <span class="comment">// 到期时间 = 当前时间+延迟时间</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 获取延迟时间</span></span><br><span class="line"><span class="comment">         *</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@param</span> unit 单位对象</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">long</span> <span class="title">getDelay</span><span class="params">(TimeUnit unit)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> unit.convert(expire - Instant.now().toEpochMilli(), TimeUnit.MILLISECONDS);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 比较器</span></span><br><span class="line"><span class="comment">         * 比较规则：延迟时间越长的对象越靠后</span></span><br><span class="line"><span class="comment">         *</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@param</span> o</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">compareTo</span><span class="params">(Delayed o)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (o == <span class="keyword">this</span>) <span class="comment">// compare zero ONLY if same object</span></span><br><span class="line">                <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">            <span class="keyword">return</span> (<span class="keyword">int</span>) (<span class="keyword">this</span>.getDelay(TimeUnit.MILLISECONDS) - o.getDelay(TimeUnit.MILLISECONDS));</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> String <span class="title">toString</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="string">&quot;DelayTask&#123;&quot;</span> +</span><br><span class="line">                    <span class="string">&quot;delay=&quot;</span> + delay +</span><br><span class="line">                    <span class="string">&quot;, expire=&quot;</span> + expire +</span><br><span class="line">                    <span class="string">&quot;, msg=&#x27;&quot;</span> + msg + <span class="string">&#x27;\&#x27;&#x27;</span> +</span><br><span class="line">                    <span class="string">&quot;, now=&quot;</span> + now +</span><br><span class="line">                    <span class="string">&#x27;&#125;&#x27;</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 生产者线程</span></span><br><span class="line"><span class="comment">     *</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> args</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        initConsumer();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">// 等待消费者初始化完毕</span></span><br><span class="line">            TimeUnit.SECONDS.sleep(<span class="number">3</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">        delayQueue.add(<span class="keyword">new</span> DelayTask(<span class="number">1000</span>, <span class="string">&quot;Task1&quot;</span>));</span><br><span class="line">        delayQueue.add(<span class="keyword">new</span> DelayTask(<span class="number">2000</span>, <span class="string">&quot;Task2&quot;</span>));</span><br><span class="line">        delayQueue.add(<span class="keyword">new</span> DelayTask(<span class="number">3000</span>, <span class="string">&quot;Task3&quot;</span>));</span><br><span class="line">        delayQueue.add(<span class="keyword">new</span> DelayTask(<span class="number">4000</span>, <span class="string">&quot;Task4&quot;</span>));</span><br><span class="line">        delayQueue.add(<span class="keyword">new</span> DelayTask(<span class="number">5000</span>, <span class="string">&quot;Task5&quot;</span>));</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 初始化消费者线程</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">initConsumer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        Runnable task = () -&gt; &#123;</span><br><span class="line">            <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    System.out.println(<span class="string">&quot;尝试获取延迟队列中的任务。&quot;</span> + LocalDateTime.now());</span><br><span class="line">                    System.out.println(delayQueue.take());</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;;</span><br><span class="line">        Thread consumer = <span class="keyword">new</span> Thread(task);</span><br><span class="line">        consumer.start();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="SynchronousQueue"><a href="#SynchronousQueue" class="headerlink" title="SynchronousQueue"></a>SynchronousQueue</h2><p><code>SynchronousQueue</code>是一个不存储元素的阻塞队列。每一个put操作必须等待一个take操作，否则不能继续添加元素。</p>
+<p>它支持公平访问队列。默认情况下采用非公平性策略访问队列。如果在构造函数传入true那么等待的线程会采用先进先出的顺序访问队列。</p>
+<h2 id="LinkedTransferQueue"><a href="#LinkedTransferQueue" class="headerlink" title="LinkedTransferQueue"></a>LinkedTransferQueue</h2><p><code>LinkedTransferQueue</code>是一个由链表结构组成的无界阻塞<code>TransferQueue</code>队列。相对于其他阻塞队列，LinkedTransferQueue多了<code>tryTransfer</code>和<code>transfer</code>方法。</p>
+<h3 id="transfer方法"><a href="#transfer方法" class="headerlink" title="transfer方法"></a>transfer方法</h3><p>如果当前有消费者正在等待接收元素(被take方法或者带时间限制的poll()方法阻塞时)，transfer方法可以把生产者传入的元素立刻transfer给消费者。如果没有消费者正在等待，transfer将会把元素存放在队列的tail节点，并等到该元素被消费者消费了才返回。</p>
+<h3 id="tryTransfer方法"><a href="#tryTransfer方法" class="headerlink" title="tryTransfer方法"></a>tryTransfer方法</h3><p><code>tryTransfer</code>方法是用来试探生产者传入的元素是否能直接传给消费者。如果没有消费者正在等待，则返回false。这个方法不管消费者有没有接收都会立刻返回，而transfer方法会等到消费者消费了才返回。</p>
+<h2 id="LinkedBlockingDeque"><a href="#LinkedBlockingDeque" class="headerlink" title="LinkedBlockingDeque"></a>LinkedBlockingDeque</h2><p>这个是由链表结构组成的双向阻塞队列。可以在构造函数传入参数来设置容量，防止其过度膨胀</p>
+]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java多线程(5) Java final域的内存语义</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/6%20final%E5%9F%9F%E7%9A%84%E5%86%85%E5%AD%98%E8%AF%AD%E4%B9%89/</url>
+    <content><![CDATA[<p>对于final域，编译器和处理器要遵守两个重排序规则：</p>
+<ol>
+<li><strong>在构造函数内对一个final域的写入，与随后把这个被构造器对象的引用赋值给一个引用变量</strong>，这两个操作之间不能重排序。</li>
+<li><strong>初次对一个包含final域对象的引用，和随后初次读这个final域</strong>，这两个操作之间不能重排序。避免读到为初始化的值</li>
+</ol>
+<span id="more"></span>
+
+<h1 id="final域的重排序则"><a href="#final域的重排序则" class="headerlink" title="final域的重排序则"></a>final域的重排序则</h1><p>对于final域，编译器和处理器要遵守两个重排序规则：</p>
+<ol>
+<li><strong>在构造函数内对一个final域的写入，与随后把这个被构造器对象的引用赋值给一个引用变量</strong>，这两个操作之间不能重排序。</li>
+<li><strong>初次对一个包含final域对象的引用，和随后初次读这个final域</strong>，这两个操作之间不能重排序。避免读到为初始化的值</li>
+</ol>
+<p>这个规则的实现包含两个方面：</p>
+<ol>
+<li>JMM禁止将final域写重排序到构造函数以外</li>
+<li>编译器会在final域的写之后，构造函数return之前，插入一个StoreStore屏障。这个屏障禁止处理器把final域的写重排序到构造函数以外。</li>
+</ol>
+<p>见如下代码：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">FinalExample</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">int</span> i;</span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">int</span> j;</span><br><span class="line">    <span class="keyword">static</span> FinalExample finalExample;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">FinalExample</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="comment">//下面两条语句不能重排序</span></span><br><span class="line">        i = <span class="number">1</span>;</span><br><span class="line">        j = <span class="number">2</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">writer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="comment">//禁止赋值语句在初始化之前执行</span></span><br><span class="line">        finalExample = <span class="keyword">new</span> FinalExample();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">reader</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="comment">//禁止读操作在引用之前执行</span></span><br><span class="line">        FinalExample object = finalExample;</span><br><span class="line">        System.out.println(object.i + <span class="string">&quot; &quot;</span> + object.j);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        <span class="comment">//j被正确赋值</span></span><br><span class="line">        <span class="keyword">new</span> Thread(FinalExample::writer).start();</span><br><span class="line">        <span class="keyword">new</span> Thread(FinalExample::reader).start();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>write()</code>方法中只有一行代码：<code>finalExample=new FinalExample()</code>。这行代码包含两个步骤：</p>
+<ol>
+<li>构造一个FinalExample对象</li>
+<li>把这个对象的引用赋值给引用变量<code>object</code></li>
+</ol>
+<p>写final域的重排序规则可以确保：在对象引用为任意线程可见之前，对象的final域已经被正确初始化过了，而普通域不具有这个保障。</p>
+<h1 id="final语义在处理器的实现"><a href="#final语义在处理器的实现" class="headerlink" title="final语义在处理器的实现"></a>final语义在处理器的实现</h1><p>写final域的重排序规则要求编译器在final域的写之后，构造函数return之前插入一个<code>StoreStore</code>屏障。读final域的重排序规则要求编译器在读final域的操作前面插入一个<code>LoadLoad</code>屏障。</p>
+<p>但是由于final读写操作是不允许重排序的，<strong>实际上final域的读写不会插入任何内存屏障</strong>。</p>
+]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java多线程(8) Java并发工具类</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/9%20Java%E5%B9%B6%E5%8F%91%E5%B7%A5%E5%85%B7%E7%B1%BB/</url>
+    <content><![CDATA[<p>在JDK的并发包里提供了几个非常有用的并发工具类。<code>CountDownLatch</code>、<code>CyclicBarrier</code>、<code>Semaphone</code>提供了一种并发流程控制手段，<code>ExChanger</code>工具类则提供了在线程交换数据的手段。本文将介绍这些工具类在一些应用场景中的使用</p>
+<span id="more"></span>
+
+<h1 id="等待多线程完成——CountDownLatch"><a href="#等待多线程完成——CountDownLatch" class="headerlink" title="等待多线程完成——CountDownLatch"></a>等待多线程完成——CountDownLatch</h1><p><code>CountDownLatch</code>允许一个或多个线程等待其他线程完成操作。</p>
+<p>遇到一种操作需要前一个操作中所有的动作完成时才能触发，最简单的就是使用<code>join</code> 。在JDK5以后我们就可以使用CountDownLatch工具类来实现join的功能</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CountDownLatchTest</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">static</span> CountDownLatch c = <span class="keyword">new</span> CountDownLatch(<span class="number">2</span>);</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        <span class="keyword">new</span> Thread(()-&gt;&#123;</span><br><span class="line">            System.out.println(<span class="number">1</span>);</span><br><span class="line">            c.countDown();</span><br><span class="line">            System.out.println(<span class="number">2</span>);</span><br><span class="line">            c.countDown();</span><br><span class="line">        &#125;).start();</span><br><span class="line"></span><br><span class="line">        c.await();</span><br><span class="line">        System.out.println(<span class="string">&quot;3&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>CountDownLatch的构造函数接收一个int类型的参数作为计数器，如果你想等待N个点完成，这里就传入N</p>
+<p>当我们调用CountDownLacth的countDown方法时，N就会减一，CountDownLatch的await方法会阻塞当前线程，指导N变成0。由于countDown方法可以用在任何地方，所以说的N个点，可以是N个线程也可以是一个线程的N个步骤。用多个线程时，只需要把这个CountDownLatch的引用传递到线程里即可。</p>
+<p>await方法可以指定时间<code>await(long time, TimeUnit unit)</code>，这个方法等待特定时间后，就会不在阻塞当前线程。join也有类似的方法。</p>
+<h1 id="同步屏障——CyclicBarrier"><a href="#同步屏障——CyclicBarrier" class="headerlink" title="同步屏障——CyclicBarrier"></a>同步屏障——CyclicBarrier</h1><p><code>CyclicBarrier</code>的字面意思时可循环使用Cyclic的屏障Barrier。要做的事情是，让一组线程到达一个屏障时被阻塞，直到最后一个线程到达屏障时，屏障才会开门，所有被屏障拦截的线程才会继续运行。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CyclicBarrierTest</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> CyclicBarrier c = <span class="keyword">new</span> CyclicBarrier(<span class="number">2</span>);</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">new</span> Thread(()-&gt;&#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                c.await();</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException | BrokenBarrierException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">            System.out.println(<span class="number">1</span>);</span><br><span class="line">        &#125;).start();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            c.await();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException | BrokenBarrierException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(<span class="number">2</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>CyclicBarrier的构造函数需要传入一个int型的变量，表示屏障拦截的线程数量，每个线程调用await方法告诉CyclicBarrier自己到达了屏障，然后线程被阻塞。</p>
+<p>上述程序可能会有两种输出结果：1、2和2、1</p>
+<p>CyclicBarrier还提供了一种更高级的构造方法：<code>CyclicBarrier(int parties, Runnable barrierAction)</code></p>
+<p>用于在线程到达屏障时，优先执行Barrier Action，方便处理更复杂的业务场景，如代码清单所示：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CyclicBarrierTest</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> CyclicBarrier c = <span class="keyword">new</span> CyclicBarrier(<span class="number">2</span>, <span class="keyword">new</span> A());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">A</span> <span class="keyword">implements</span> <span class="title">Runnable</span></span>&#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            System.out.println(<span class="number">3</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">new</span> Thread(()-&gt;&#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                c.await();</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException | BrokenBarrierException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">            System.out.println(<span class="number">1</span>);</span><br><span class="line">        &#125;).start();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            c.await();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException | BrokenBarrierException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(<span class="number">2</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201024142855.png" alt="执行结果"></p>
+<p>处理器会优先执行A()的线程</p>
+<h2 id="CyclicBarrier和CountDownLatch的区别"><a href="#CyclicBarrier和CountDownLatch的区别" class="headerlink" title="CyclicBarrier和CountDownLatch的区别"></a>CyclicBarrier和CountDownLatch的区别</h2><p>CountDownLatch的计数器只能使用一次，而CyclicBarrier的计数器可以使用reset()方法充值。所以CyclicBarrier能处理更为复杂的业务场景。例如如果计算发生错误，可以重置计数器，并让线程重新执行一次。</p>
+<p>CyclicBarrier还提供了其他有用的方法，比如<code>getNumberWaiting</code>方法可以获得<code>Cyclic-Barrier</code>阻塞的线程数量。<code>isBroken()</code>方法用来了解阻塞的线程是否被中断。</p>
+<h1 id="控制并发线程数的Semaphore"><a href="#控制并发线程数的Semaphore" class="headerlink" title="控制并发线程数的Semaphore"></a>控制并发线程数的Semaphore</h1><p><code>Semaphore</code>是用来控制同时访问特定资源的线程数量，它通过协调各个线程，以保证合理的使用公共资源</p>
+<p>保证在同一时刻只能有一定数量的线程能够获得指定资源。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SemaphoreTest</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> THREAD_COUNT = <span class="number">30</span>;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> ExecutorService threadPool = Executors.newFixedThreadPool(THREAD_COUNT);</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> Semaphore s = <span class="keyword">new</span> Semaphore(<span class="number">10</span>);</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        AtomicInteger count = <span class="keyword">new</span> AtomicInteger();</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i=<span class="number">0</span>; i&lt;THREAD_COUNT; ++i) &#123;</span><br><span class="line">            threadPool.execute(()-&gt;&#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    System.out.println(count.incrementAndGet() + <span class="string">&quot;:save data&quot;</span>);</span><br><span class="line">                    s.acquire();</span><br><span class="line">                    s.release();</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;);</span><br><span class="line">        &#125;</span><br><span class="line">        threadPool.shutdown();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>虽然有30个线程正在执行，但是只允许10个并发执行。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201024145140.png" alt="image-20201024145138722"></p>
+<p>然后由AQS的非公平锁来为接下来线程调度资源。</p>
+<h2 id="其他方法"><a href="#其他方法" class="headerlink" title="其他方法"></a>其他方法</h2><p>Semaphore还提供了一些其他方法，具体如下所示：</p>
+<table>
+<thead>
+<tr>
+<th>方法名</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>intavailablePermits()</code></td>
+<td>返回此信号量中当前可用的许可证数</td>
+</tr>
+<tr>
+<td><code>intgetQueueLength()</code></td>
+<td>返回正在等待获取许可证的线程数</td>
+</tr>
+<tr>
+<td><code>booleanhasQueuedThreads()</code></td>
+<td>是否有现成正在等待获取许可证</td>
+</tr>
+<tr>
+<td><code>void reducePermits(int reduction)</code></td>
+<td>减少reduction个许可证，<strong>是个protected方法</strong></td>
+</tr>
+<tr>
+<td><code>Collection getQueuedThreads()</code></td>
+<td>返回所有等待获取许可证的线程集合，<strong>是个protected方法</strong></td>
+</tr>
+</tbody></table>
+<h1 id="线程交换数据的Exchanger"><a href="#线程交换数据的Exchanger" class="headerlink" title="线程交换数据的Exchanger"></a>线程交换数据的Exchanger</h1><p>Exchanger是以用于线程间协作的工具类。Exchanger用于进行线程间的数据交换。它提供一个同步点，在这个同步点，两个线程可以交换彼此的数据。这两个线程通过exchange方法交换数据，如果第一个线程先执行<code>exchange()</code>方法，他会一直等待第二个线程也执行exchange方法，当两个线程都到达同步点时，这两个线程就可以交换数据。将本线程生产出来的数据传递给对方。</p>
+<h2 id="应用场景"><a href="#应用场景" class="headerlink" title="应用场景"></a>应用场景</h2><p>Exchanger可以用于遗传算法，遗传算法里需要选出两个人作为交配对象，这时候会交换两人的数据，并使用交叉规则得出2个交配结果。Exchanger也可以用于校对工作，见如下案例：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ExchangerTest</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Exchanger&lt;String&gt; exgr = <span class="keyword">new</span> Exchanger&lt;&gt;();</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> ExecutorService threadPool = Executors.newFixedThreadPool(<span class="number">2</span>);</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        threadPool.execute(()-&gt;&#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                String A = <span class="string">&quot;银行流水&quot;</span>;</span><br><span class="line">                exgr.exchange(A);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">        threadPool.execute(()-&gt;&#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                String B = <span class="string">&quot;银行流水B&quot;</span>;</span><br><span class="line">                String A = exgr.exchange(B);</span><br><span class="line">                System.out.println(<span class="string">&quot;A和B数据是否一直:&quot;</span> + A.equals(B));</span><br><span class="line">                System.out.println(<span class="string">&quot;A录入的是:&quot;</span> + A);</span><br><span class="line">                System.out.println(<span class="string">&quot;B录入的是:&quot;</span> + B);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">        threadPool.shutdown();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java多线程(10) Fork&amp;Join框架</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/Fork&amp;Join%E6%A1%86%E6%9E%B6/</url>
+    <content><![CDATA[<p>Fork/Join框架是Java7提供的一个用于并行执行任务的框架，是一个把大任务分割成若干个小任务最终汇总每个小任务结果后得到大任务结果的框架。</p>
+<span id="more"></span>
+
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201023202148.png" alt="Fork Join的运行流程图"></p>
+<h1 id="工作窃取算法"><a href="#工作窃取算法" class="headerlink" title="工作窃取算法"></a>工作窃取算法</h1><p>工作窃取算法是指某个线程从其他队列里窃取任务来执行。那么，为什么需要使用工作窃取算法呢？假如我们需要做一个比较大的任务，可以把这个任务分割为若干个互不依赖的子任务，线程们将自己的任务干完之后，与其等着不如去帮忙干活，于是就从其他任务的队列里面窃取一个任务来执行。这时他们会访问同一个队列，所以为了减少窃取任务线程和被窃取任务线程之间的竞争，通常会使用双端队列，<strong>被窃取任务线程永远在双端队列的头部拿任务执行，而窃取任务永远在双端队列的尾部拿任务执行</strong>。</p>
+<ul>
+<li>优点：充分利用线程进行并行计算，减少了线程间的竞争</li>
+<li>缺点：在某些情况下还是存在竞争，比如双端队列只有一个任务的时候。并且该算法会消耗了更多的系统资源，比如创建了多个线程和多个双端队列。</li>
+</ul>
+<h1 id="Fork-Join框架的设计"><a href="#Fork-Join框架的设计" class="headerlink" title="Fork/Join框架的设计"></a>Fork/Join框架的设计</h1><p>明白了Fork/Join框架的需求之后，我们应该如何设计一个Fork/Join框架呢？</p>
+<h2 id="分割任务"><a href="#分割任务" class="headerlink" title="分割任务"></a>分割任务</h2><p>首先我们要有一个fork类来将大任务分割成子任务，有可能子任务还是很大，所以还需要不停地分割，直到子任务足够小</p>
+<h2 id="执行任务并合并结果"><a href="#执行任务并合并结果" class="headerlink" title="执行任务并合并结果"></a>执行任务并合并结果</h2><p>分割地子任务分别放在多个双端队列里，然后启动线程分别从这些双端队列里获取任务执行。子任务执行完地结果统一放在一个队列里，启动一个线程从队列里拿数据，然后合并这些数据。</p>
+<h2 id="Fork-Join使用两个类完成以上两件事"><a href="#Fork-Join使用两个类完成以上两件事" class="headerlink" title="Fork/Join使用两个类完成以上两件事"></a>Fork/Join使用两个类完成以上两件事</h2><h3 id="ForkJoinTask"><a href="#ForkJoinTask" class="headerlink" title="ForkJoinTask"></a>ForkJoinTask</h3><p>首先创建一个ForkJoin任务。它提供在任务中执行<code>fork()</code>和<code>join()</code>操作的机制。通常情况下，我们不需要直接继承ForkJoinTask类，只需要继承它的子类：</p>
+<ul>
+<li><code>RecursiveAction</code>：用于没有返回结果的任务</li>
+<li><code>RecursiveTask</code>：用于返回有返回结果的任务</li>
+</ul>
+<h3 id="ForkJoinPool"><a href="#ForkJoinPool" class="headerlink" title="ForkJoinPool"></a>ForkJoinPool</h3><p>ForkJoinTask需要通过ForkJoinPool来执行</p>
+<p>任务分割出的子任务会添加到当前工作线程所维护的双端队列中，进入队列的头部。当一个工作线程的队列里暂时没有任务时，它会随机从其他工作线程的队列的尾部获取一个任务</p>
+<h1 id="使用Fork-Join框架"><a href="#使用Fork-Join框架" class="headerlink" title="使用Fork/Join框架"></a>使用Fork/Join框架</h1><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CountTask</span> <span class="keyword">extends</span> <span class="title">RecursiveTask</span>&lt;<span class="title">Integer</span>&gt; </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> THRESHOLD = <span class="number">2</span>;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> start;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> end;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">CountTask</span><span class="params">(<span class="keyword">int</span> start, <span class="keyword">int</span> end)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.end = end;</span><br><span class="line">        <span class="keyword">this</span>.start = start;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> Integer <span class="title">compute</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span> sum = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 如果任务足够小就计算任务</span></span><br><span class="line">        <span class="keyword">boolean</span> canCompute = (end - start) &lt;= THRESHOLD;</span><br><span class="line">        <span class="keyword">if</span> (canCompute) &#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> i=start; i&lt;=end; i++) &#123;</span><br><span class="line">                sum += i;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">int</span> middle = ((end - start) &gt;&gt; <span class="number">2</span>) + start;</span><br><span class="line">            CountTask leftTask = <span class="keyword">new</span> CountTask(start, middle);</span><br><span class="line">            CountTask rightTask = <span class="keyword">new</span> CountTask(middle+<span class="number">1</span>, end);</span><br><span class="line">            <span class="comment">//执行子任务</span></span><br><span class="line">            leftTask.fork();</span><br><span class="line">            rightTask.fork();</span><br><span class="line">            <span class="comment">//等待子任务执行完，并得到结果</span></span><br><span class="line">            <span class="keyword">int</span> leftResult = leftTask.join();</span><br><span class="line">            <span class="keyword">int</span> rightResult = rightTask.join();</span><br><span class="line">            <span class="comment">//合并子任务</span></span><br><span class="line">            sum = leftResult + rightResult;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> sum;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        ForkJoinPool forkJoinPool = <span class="keyword">new</span> ForkJoinPool();</span><br><span class="line">        <span class="comment">//生成一个计算任务，负责计算1+2+3+4</span></span><br><span class="line">        CountTask task = <span class="keyword">new</span> CountTask(<span class="number">1</span>, <span class="number">4</span>);</span><br><span class="line">        <span class="comment">//执行一个子任务</span></span><br><span class="line">        Future&lt;Integer&gt; result = forkJoinPool.submit(task);</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            System.out.println(result.get());</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException | ExecutionException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="Fork-Join框架的异常处理"><a href="#Fork-Join框架的异常处理" class="headerlink" title="Fork/Join框架的异常处理"></a>Fork/Join框架的异常处理</h1><p>ForkJoinTask在执行的时候可能抛出异常，但是我们没办法再主线程里直接捕获异常，所以ForkJoinTask提供了<code>isCompletedAbnormally</code>方法检查任务是否已经抛出异常或已经被取消了，并且可以通过<code>ForkJoinTask.getException</code>方法获取异常。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span>(task.isCompletedAbnormally()) &#123;</span><br><span class="line">    System.out.println(task.getException);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>getException</code>方法返回<code>Throwable</code>对象，如果任务被取消了则返回<code>CancellationException</code>。如果任务没有完成或者没有抛出异常则返回null</p>
+<h1 id="Fork-Join框架的实现原理"><a href="#Fork-Join框架的实现原理" class="headerlink" title="Fork/Join框架的实现原理"></a>Fork/Join框架的实现原理</h1><p>ForkJoinPool由<code>ForkJoinTask</code>数组和<code>ForkJoinWorkerThread</code>数组组成，ForkJoinTask数组负责将存放程序提交给ForkJoinPool的任务，而ForkJoinWorkerThread数组则负责执行这些任务</p>
+<h2 id="ForkJoinTask的fork方法实现原理"><a href="#ForkJoinTask的fork方法实现原理" class="headerlink" title="ForkJoinTask的fork方法实现原理"></a>ForkJoinTask的fork方法实现原理</h2><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> ForkJoinTask&lt;V&gt; <span class="title">fork</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    Thread t;</span><br><span class="line">    <span class="keyword">if</span> ((t = Thread.currentThread()) <span class="keyword">instanceof</span> ForkJoinWorkerThread)</span><br><span class="line">        ((ForkJoinWorkerThread)t).workQueue.push(<span class="keyword">this</span>);</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        ForkJoinPool.common.externalPush(<span class="keyword">this</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title></title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/%E9%AB%98%E5%B9%B6%E5%8F%91%E7%9A%84%E5%AE%9E%E6%88%98/</url>
+    <content><![CDATA[<h1 id="线程安全性"><a href="#线程安全性" class="headerlink" title="线程安全性"></a>线程安全性</h1><p>非正式意义上来说，对象的状态是指存储在状态变量中的数据。对象的状态可能包含其他依赖对象的域。例如，某个HashMap的状态不仅存储在HashMap对象本身，还存储在许多Map.Entry对象中。对象的状态中包含了任何可能影响其外部可见行为的数据。</p>
+<p>一个线程是否安全，取决于它是否被多个线程访问。相比于多线程基础的学习，接下来我们将更侧重<strong>防止在数据上发生不受控的并发访问</strong>。</p>
+<h2 id="对可变的状态变量设置合适的同步"><a href="#对可变的状态变量设置合适的同步" class="headerlink" title="对可变的状态变量设置合适的同步"></a>对可变的状态变量设置合适的同步</h2><p>一般有三种方式来解决一个状态变量被多个线程访问发生的问题：</p>
+<ol>
+<li>不在线程之间共享该状态变量</li>
+<li>将状态变量修改为不可变的变量</li>
+<li>在访问状态变量时使用同步</li>
+</ol>
+<h2 id="什么是线程安全性？"><a href="#什么是线程安全性？" class="headerlink" title="什么是线程安全性？"></a>什么是线程安全性？</h2><p>《Java并发编程实战》中是这么定义的：当多个线程访问某个类时，这个类始终能表现出正确的行为，那么这个类是线程安全的。</p>
+<p>在线程安全的定义中，最核心的概念是<strong>正确性</strong>。正确性的含义是，某个类的行为与其规范完全一致。</p>
+]]></content>
+  </entry>
+  <entry>
+    <title>Java多线程(6) happens-before规则</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/JMM%20happens-before%E8%A7%84%E5%88%99/</url>
+    <content><![CDATA[<p><code>happens-before</code>是理解Java内存模型的关键。</p>
+<span id="more"></span>
+
+<h1 id="happens-before"><a href="#happens-before" class="headerlink" title="happens-before"></a>happens-before</h1><p>JMM把<code>happens-before</code>要求禁止的重排序分为了下面两类：</p>
+<ul>
+<li>会改变程序执行结果的重排序</li>
+<li>不会改变程序执行结果的重排序</li>
+</ul>
+<p>JMM对这两种不同性质的重排序，采取了不同的策略：</p>
+<ul>
+<li>对于会改变程序执行结果的重排序，JMM要求编译器和处理器必须禁止这种重排序</li>
+<li>对于不会改变程序执行结果的重排序，JMM对编译器和处理器不做要求。</li>
+</ul>
+<p>JMM遵循着一个原则：只要不改变程序执行结果，编译器和处理器怎么优化都行。例如：如果一个volatile变量只会被单个线程访问，那么编译器可以把这个volatile变量当作一个普通变量来对待。</p>
+<h2 id="happens-before的定义"><a href="#happens-before的定义" class="headerlink" title="happens-before的定义"></a><code>happens-before</code>的定义</h2><ol>
+<li>如果一个操作<code>happens-before</code>另一个操作，那么第一个操作的执行结果将对第二个操作可见，而且第一个操作的执行顺序排在第二个操作之前。</li>
+<li>两个操作之间存在<code>happens-before</code>关系，并不意味着Java平台的具体实现必须要按照happens-before关系指定的顺序来执行。如果重排序之后的执行结果不变，这种重排序是被允许的。</li>
+</ol>
+<h2 id="happens-before规则"><a href="#happens-before规则" class="headerlink" title="happens-before规则"></a><code>happens-before</code>规则</h2><p>《JSR-133:Java Memory Model and Thread Specification》定义了如下happens-before规则</p>
+<ol>
+<li>程序顺序规则：一个线程中的每个操作，<code>happens-before</code>于该程序中的任意后续操作</li>
+<li>监视器锁规则：对一个锁的解锁，<code>happens-before</code>于随后对这个锁的加锁</li>
+<li>volatile变量规则：一个volatile域的写，<code>happens-before</code>于随后这个域的读</li>
+<li>传递性</li>
+<li><code>start()</code>规则：如果线程A执行操作<code>ThreadB.start()</code>，那么A线程的<code>ThreadB.start</code>操作<code>happens-before</code>于线程B中的任意操作。</li>
+<li><code>join()</code>规则：如果线程A执行操作ThreadB.join()并成功返回，那么线程B中的任意操作<br>happens-before于线程A从ThreadB.join()操作成功返回</li>
+</ol>
+]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java多线程(9) 双重锁定和延迟初始化</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/%E5%8F%8C%E9%87%8D%E9%94%81%E5%AE%9A%E5%92%8C%E5%BB%B6%E8%BF%9F%E5%88%9D%E5%A7%8B%E5%8C%96/</url>
+    <content><![CDATA[<p>双重检查锁定是一种常用的延迟初始化的方法，但它是一个错误的用法，文本将着重分析双重检查锁定。</p>
+<span id="more"></span>
+
+<h1 id="双重锁定"><a href="#双重锁定" class="headerlink" title="双重锁定"></a>双重锁定</h1><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DoubleCheckedLocking</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> DoubleCheckedLocking instance;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> DoubleCheckedLocking <span class="title">getInstance</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (instance == <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="keyword">synchronized</span> (DoubleCheckedLocking.class) &#123;</span><br><span class="line">                <span class="keyword">if</span> (instance == <span class="keyword">null</span>) instance = <span class="keyword">new</span> DoubleCheckedLocking();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> instance;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>为了避免出现线程安全问题，并且在竞争不冲突的情况下性能开销不被大幅降低。人们想出了上面代码的写法。有两个优点：</p>
+<ul>
+<li>多个线程视图在同一时间创建对象时，会通过加锁来保证只有一个线程能创建对象。</li>
+<li>在对象创建好之后，执行<code>getInstance</code>方法不在需要获取锁，直接返回已创建好的对象即可。</li>
+</ul>
+<p>然后这是一个<strong>错误的优化</strong>！</p>
+<h1 id="问题的根源"><a href="#问题的根源" class="headerlink" title="问题的根源"></a>问题的根源</h1><p><code>instance = new DoubleCheckedLocking</code>可以分为下面三行伪代码：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">memory = allocate();  <span class="comment">//1：分配对象的内存空间</span></span><br><span class="line">ctorInstance(memory); <span class="comment">//2：初始化对象</span></span><br><span class="line">instance = memory;    <span class="comment">//3：设置instance指向刚分配的内存地址</span></span><br></pre></td></tr></table></figure>
+
+<p>在部分编译器上，2、3之间可能发生重排序。在单线程的情况下，只要保证在初次访问到对象之前完成以上三步即可。所以2、3之间的重排序是合法的。</p>
+<p>但是在多线程中，这种方式就会出问题。可能内存地址赋值给了引用，这时恰好B线程去访问这个对象且处理器还没来得及为内存地址初始化。这时B线程就会访问到一个未正确赋值的对象。</p>
+<p>要解决这个问题很简单，从根源上防止即可：</p>
+<ol>
+<li>不允许2、3重排序</li>
+<li>允许2、3重排序，但不允许其他线程看到这个重排序</li>
+</ol>
+<h1 id="基于volatile的解决方案"><a href="#基于volatile的解决方案" class="headerlink" title="基于volatile的解决方案"></a>基于volatile的解决方案</h1><p>只需要将变量声明为<code>volatile</code>即可。<code>volatile</code>的内存语义禁止重排序</p>
+<h1 id="基于类初始化的解决方案"><a href="#基于类初始化的解决方案" class="headerlink" title="基于类初始化的解决方案"></a>基于类初始化的解决方案</h1><p>JVM在类的初始化阶段(即Class加载后，且被类使用前)，会执行类的初始化。<strong>在执行类的初始化其间</strong>，JVM回去获取一个锁，这个锁可以同步多个线程对同一个类的初始化。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">InstanceFactory</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">InstanceHolder</span></span>&#123;</span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">static</span> Instance instanceFactory = <span class="keyword">new</span> Instance();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Instance <span class="title">getInstance</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> InstanceHolder.instanceFactory;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201020172507.png" alt="示意图"></p>
+<p>初始化一个类，包括执行这个类的静态初始化和初始化在这个类中声明的静态字段。根据Java语言规范，在首次发生下列任意一种情况时，一个类或接口类型T将立刻初始化</p>
+<ol>
+<li>T是一个类，而且一个T类型的实例被创建；</li>
+<li>T是一个类，且T中声明的一个静态方法被调用；</li>
+<li>T中声明的一个静态字段被赋值；</li>
+<li>T中声明的一个静态字段被使用，而且这个字段不是一个常量字段。</li>
+<li>T是一个顶级类，而且一个断言语句嵌套在T内部被执行。</li>
+</ol>
+<p>在<code>InstanceFactory</code>示例代码中，首次执行<code>getInstance()</code>方法的线程将导致<code>InstanceHolder</code>类被初始化。</p>
+<p>由于Java语言是多线程的，多个线程可能在同一时间尝试去初始化同一个类或接口。因此，在Java中初始化一个类或者接口时，需要做细致的同步处理。</p>
+<p>Java语言规范规定，对于每一个类或接口C，都有一个唯一的初始化锁LC与之对应。从C到LC的映射，由JVM的具体实现去自由实现。JVM在类初始化其间会获取这个初始化锁，并且每个线程至少获取一次锁确保这个类已经被初始化过了。</p>
+<p>关于类的初始化可以详见《Java虚拟机》，那里会细致讲解</p>
+<p>大部分情况下正常的初始化要优于延迟初始化。如果确实需要对实例字段使用线程安全的延迟初始化，可以使用上面介绍的基于<code>volatile</code>的延迟初始化方案；如果需要对静态字段使用线程安全的延迟初始化，可以使用上面介绍的基于类初始化的方案。</p>
+]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>网络层</title>
+    <url>/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%BD%91%E7%BB%9C%E5%B1%82/</url>
+    <content><![CDATA[<p>本章重要内容：</p>
+<blockquote>
+<p>（1）虚拟互联网络的概念</p>
+<p>（2） ip地址与物理地址的关系</p>
+<p>（3）传统的分类的IP地址（包括子网掩码）和无分类域间路由选择CIDR</p>
+<p>（4）路由选择协议的工作原理</p>
+</blockquote>
+<span id="more"></span>
+
+<h1 id="1-网络层提供的服务"><a href="#1-网络层提供的服务" class="headerlink" title="1 网络层提供的服务"></a>1 网络层提供的服务</h1><p>网络层：负责在不同网络之间传输数据包，不管顺序也不负责丢失重传</p>
+<p><strong>网络层向上只提供简单灵活的、无连接的、尽最大努力交付的数据报服务</strong></p>
+<h1 id="2-IP协议"><a href="#2-IP协议" class="headerlink" title="2 IP协议"></a>2 IP协议</h1><p>ip协议是TCP/IP协议体系中两个最主要的协议之一</p>
+<p>与ip协议配套的还有三个协议：</p>
+<ul>
+<li><code>地址解析协议ARP</code></li>
+<li><code>网际控制报文协议ICMP</code></li>
+<li><code>网际组管理协议IGMP</code></li>
+</ul>
+<h2 id="2-1-虚拟互联网络"><a href="#2-1-虚拟互联网络" class="headerlink" title="2.1 虚拟互联网络"></a>2.1 虚拟互联网络</h2><p><strong>设备</strong>：</p>
+<ul>
+<li>物理层使用的中间设备叫做<code>转发器</code></li>
+<li>数据链路层使用的中间设备叫做<code>网桥或桥接器</code></li>
+<li>网络层使用的中间设备叫做<code>路由器</code></li>
+<li>在网络层以上使用的中间设备叫做<code>网关</code>。用网关兼容两个不兼容的系统需要在高层进行协议的转换</li>
+</ul>
+<p>当中间设备使转发器或者网桥时，这仅仅是把一个网络扩大了，而从网络层的角度看，这仍然是一个网络。网关由于比较复杂，目前使用较少，因此现在讨论网络互连时，都是指用路由器进行网络互连和路由选择。路由器其实就是一台专用计算机。</p>
+<p>由于参加互连的网络都是使用<strong>网际协议IP</strong>，因此可以把互连以后的计算机网络可以看成一个<strong>虚拟互连网络</strong>。</p>
+<p>也是基于上面的原因，<strong>互联网可以由多种异构网络互连组成</strong></p>
+<h2 id="2-2-分类的ip地址"><a href="#2-2-分类的ip地址" class="headerlink" title="2.2 分类的ip地址"></a>2.2 分类的ip地址</h2><h3 id="2-2-1-ip地址及其表示方法"><a href="#2-2-1-ip地址及其表示方法" class="headerlink" title="2.2.1 ip地址及其表示方法"></a>2.2.1 ip地址及其表示方法</h3><p>整个互联网就是一个单一的、抽象的网络。IP地址就是给互联网上的每一台主机（或路由器）的每一个接口分配一个在全世界范围内是唯一的32位的标识符。IP地址现在由互联网名字和数字分配机构ICANN进行分配。</p>
+<p>IP地址的编址方式共经过三个历史阶段：</p>
+<h4 id="1）分类的IP地址"><a href="#1）分类的IP地址" class="headerlink" title="1）分类的IP地址"></a>1）分类的IP地址</h4><p>所谓“分类的IP地址”就是将IP地址划分位若干个固定类，每一类地址都由两个固定长度的地段组成，其中第一个字段是<strong>网络号</strong>（net-id），它标志主机（或路由器）所连接到的网络，一个网络号在整个互联网范围内必须是唯一的。第二个字段是<strong>主机号</strong>（host-id），他标志的是该主机。</p>
+<p>这种两级的ip地址可以记为：IP地址 ::= {&lt;网络号&gt;,&lt;主机号&gt;}</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200507164224.png" alt="image-20200507164215690"></p>
+<p>现在广泛使用无分类IP地址进行路由选择，A,B,C类地址的区分已成为历史</p>
+<p>因为IP地址都是32位的二进制代码，IP地址一般采用<strong>点分十进制记法</strong>，如下图所示</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200507170522.png" alt="image-20200507170441529"></p>
+<p><font style="color: #FF9966"><strong>IP地址的指派范围</strong>：</font><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200507171706.png" alt="image-20200507171705569"></p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200507171952.png" alt="image-20200507171731273.png"></p>
+<p><font style="color: #FF9966"><strong>IP地址的重要特点</strong></font></p>
+<p>（1）每一个IP地址都由网络号和主机号两部分组成，从这个意义上说，IP地址是一种分等级的地址结构。分等级的好处是：<strong>第一</strong>，IP地址管理机构在分配IP地址时，只分配网络号（第一级），而剩下的主机号（第二级）则由得到该网络号的单位自行分配，方便了IP地址的管理；<strong>第二</strong>，路由器仅根据目的主机所连接的网络号来转发分组（而不考虑目的主机号），这样就可以使路由器中的项目数大幅度减少，从而减小了路由表所占的存储空间以及查找路由表的时间。</p>
+<p>（2）实际上IP地址是标志一台主机（或路由器）和一条链路的接口。当一台主机同时连接到两个网络上时。该主机就必须同时具有两个相应的ip地址，其网络号必须是不同的。这种主机称为多归属主机。</p>
+<p>（3）按照互联网的观点，一个网络是指具有相同网络号net-id的主机的集合，因此，用转发器或网桥连接起来的若干个局域网仍为一个网络，因为这些局域网具有同样的网络号</p>
+<p>（4）在IP地址中，所有分配到网络号的网络都是平等的。</p>
+<h4 id="2）子网的划分"><a href="#2）子网的划分" class="headerlink" title="2）子网的划分"></a>2）子网的划分</h4><p><strong>早期的ip地址设计确实不够合理</strong>：</p>
+<ol>
+<li><p>ip地址空间的<strong>利用率有时很低</strong>；</p>
+<p>每一个A类地址网络可连接的主机数超过1000万，而每一个B类地址网络可连接数也超过6万。有些公司考虑今后的发展不愿意申请C类地址，造成IP地址的浪费。导致IP地址空间的资源过早的被用完</p>
+</li>
+<li><p>给每一个物理网络分配一个网络号会使<strong>路由表变得太大而使网络性能变坏</strong>。</p>
+<p>每一个路由器都应当能够从路由表查出应怎么样到达其他网络的下一跳路由器。网络数越多，路由表的项目数越多。这样就增加了路由器的成本，使路由器和整个互联网的性能都下降了</p>
+</li>
+<li><p>两级IP地址<strong>不够灵活</strong></p>
+<p>有时情况紧急，一个单位需要在新的地点马上开通一个新的网络。但是在申请到一个新的IP地址之前，新增加的网络是不可能连接到互联网上工作的。我们希望有一种方法，使一个单位能随时灵活的增加本单位的网络</p>
+</li>
+</ol>
+<p>为解决上诉问题，从1985年起在IP地址中有增加了一个子网号字段，使二级IP地址便成为三级IP地址。</p>
+<p><strong>划分子网的基本思路如下</strong>：</p>
+<ol>
+<li><p>一个拥有许多物理网络的单位，可将所属物理网络划分为若干个子网。<strong>这个单位对外仍然表现为一个网络</strong></p>
+</li>
+<li><p>划分子网的方法是从网络的主机号接用若干位作为子网号，主机号就相应减少了同样的位数。于是两级IP地址在本单位内部就变成了三级IP地址：</p>
+<p>​                                            IP地址 ::= {&lt;网络号&gt;，&lt;子网号&gt;，&lt;主机号&gt;}</p>
+</li>
+<li><p>凡是从其他网络发送给本单位某台主机的IP数据报，仍然是根据IP数据报的目的网络号找到连接在本单位网络上的路由器。此路由器在收到IP数据报后，在按目的网络号和子网号找到目的子网，把IP数据报交付目的主机。</p>
+</li>
+</ol>
+<p><font style="color: #FF9966"><strong>子网掩码</strong></font></p>
+<p>​    从IP数据报的首部无法看出源主机或目的主机所连接的网络是否进行了子网的划分。因此，出现了子网掩码 ，如下图：</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200515110908.png" alt="image-20200515110859717"></p>
+<p>使用子网的好处就是不管网络有没有划分子网，只要把子网掩码和IP地址进行逐位相与运算，就可以得出对应的网络地址。<strong>在网络外和网络内部看到的子网掩码是不同的</strong>，进入网络内部的路由器时可以看到对应的三级IP地址的子网掩码，但是网络外部只能看到二级IP地址的子网掩码</p>
+<p><strong>互联网要求所有网络都必须有子网掩码</strong>，如果一个网络不划分子网，那么该网络的子网掩码就使用默认子网掩码</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200515112416.png" alt="image-20200515112222062"></p>
+<p><strong>子网掩码使一个网络或一个子网的重要属性</strong>，在RFC 950成为互联网的正式标准后，路由器在和相邻路由器交换路由信息时，必须把自己所在网络（或子网）的子网掩码告诉相邻路由器。</p>
+<p><em>全0或者全1的子网号</em>由于CIRD的广泛使用，而被允许使用，但是一定要谨慎使用。</p>
+<p>划分子网增加了灵活性，但减少了能够连接在网络上的主机总数。</p>
+<p><font style="color: #FF9966"><strong>使用子网时的分组转发</strong></font></p>
+<p>使用子网划分后，路由表必须包含以下三项内容：<strong>目的网络地址</strong>，<strong>子网掩码</strong>，<strong>下一跳地址</strong></p>
+<p>在划分子网的情况下，路由表转发分组的算法如下：</p>
+<ol>
+<li>从收到的数据报的首部提取目的IP地址D</li>
+<li>先判断是否为直接交付。对路由表直接相连的网络逐个进行检查：用个网络的子网掩码和D逐位相“与”运算，看结果是否和相应的网络地址匹配。若匹配，则把分组进行直接交付（把D转换成物理地址，把数据报封装成帧发送出去）</li>
+</ol>
+<h4 id="3-无类别域间路由-CIDR"><a href="#3-无类别域间路由-CIDR" class="headerlink" title="3) 无类别域间路由:CIDR"></a>3) 无类别域间路由:CIDR</h4><p>就算是三级IP也是不够用的，人们引入了<code>变长子网掩码VLSM</code>进一步提高IP地址资源的利用率。在VLSM的基础上又进一步研究出无分类编址方法，它的正式名字是<code>无分类域间路由选择CIDR</code></p>
+<p><font style="color: #FF9966"><strong>CIDR最主要的特点</strong></font></p>
+<ul>
+<li>CIDR消除了传统的A,B,C类地址以及划分子网的概念，因此可以有效地分配IPv4地地址空间。</li>
+<li>CIDR使用各种长度地网络前缀来代替分类地址中地网络号和子网号</li>
+<li>IP地址从三级编址（使用子网掩码）又回到了二级编址</li>
+</ul>
+<p>无分类地两级编址地记法是：IP地址 ::= {&lt;网络前缀&gt;, &lt;主机号&gt;}  </p>
+<p>CIDR还使用<code>斜线记法</code>，又称CIDR记法，即在IP地址前面加上一个斜线，然后写上网络前缀所占地位数。    </p>
+<h4 id="4）构成超网"><a href="#4）构成超网" class="headerlink" title="4）构成超网"></a>4）构成超网</h4><p>前缀长度不超过23位地CIDR地址块都包含了多个C类地址。这些C类地址合起来就构成了超网。</p>
+<p><font style="color: #FF9966"><strong>最长匹配长度</strong></font></p>
+<p>使用CIDR时，路由表中地每个项目由<code>网络前缀</code>和<code>下一跳地址组成</code>。在查找路由表时可能会得到不止一个匹配结果。这时应当从匹配结果中选择具有最长网络前缀的路由：<code>最长前缀匹配</code>。</p>
+<blockquote>
+<p>网络前缀越长，其地址块就越小，因而路由就越具体。</p>
+</blockquote>
+<h3 id="2-2-2-ip地址与硬件地址"><a href="#2-2-2-ip地址与硬件地址" class="headerlink" title="2.2.2 ip地址与硬件地址"></a>2.2.2 ip地址与硬件地址</h3><p>从层次上看，物理地址时数据链路层和物理层使用的地址，而ip地址是网络层和以上各层使用的地址，是一种逻辑地址</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200507220639.png" alt="image-20200507220432381"></p>
+<h4 id="IP地址与硬件地址的区别"><a href="#IP地址与硬件地址的区别" class="headerlink" title="IP地址与硬件地址的区别"></a>IP地址与硬件地址的区别</h4><ol>
+<li><strong>在IP层抽象的互联网只能看到IP数据报</strong>，他的源地址和目的地址不变</li>
+<li>虽然IP数据报首部有源IP地址，但<strong>路由器只根据目的IP地址的网络号进行路由选择</strong></li>
+<li><strong>在局域网的链路层，只能看见MAC帧</strong>，IP数据报被封装在MAC帧中。MAC帧在不同网络上转送时，其首部中的源地址和目的地址都要变化</li>
+<li>尽管互联在一起的网络的硬件地址体系各不相同，但<strong>IP层抽象的互联网却屏蔽了下层这些很复杂的细节。只要能在网络层讨论问题，就能够使用统一抽象的IP地址研究主机和主机或路由器之间的通信</strong>。</li>
+</ol>
+<h2 id="2-3-地址解析协议ARP"><a href="#2-3-地址解析协议ARP" class="headerlink" title="2.3 地址解析协议ARP"></a>2.3 地址解析协议ARP</h2><p>ARP协议的任务是通过机器的IP地址，寻找到对应的硬件地址</p>
+<p>每一台主机都有ARP高速缓存</p>
+<h2 id="2-4-IP数据报的格式"><a href="#2-4-IP数据报的格式" class="headerlink" title="2.4 IP数据报的格式"></a>2.4 IP数据报的格式</h2><p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200510172441.png" alt="IP数据报的格式"></p>
+<h3 id="2-4-1-IP数据报首部的固定部分中的字段"><a href="#2-4-1-IP数据报首部的固定部分中的字段" class="headerlink" title="2.4.1 IP数据报首部的固定部分中的字段"></a>2.4.1 IP数据报首部的固定部分中的字段</h3><ol>
+<li><p><strong>版本</strong> 占4位，指IP协议的版本。通信双方的IP协议的版本必须一致。</p>
+</li>
+<li><p><strong>首部长度</strong> 占4位，可表示的最大十进制数值是15。首部长度的单位是32位字（1个32位字节长是4字节）。因为IP首部的固定长度是20位字节，因此首部长度字段的最小值是5.</p>
+</li>
+<li><p><strong>区分服务</strong> 占8位，用来获得更好的服务，一般情况下不使用这个字段。</p>
+</li>
+<li><p><strong>总长度</strong> 总长度指首部和数据之和的长度，单位为字节。总长度字段为16位，数据报最大长度是2^16-1=65535字节。然而实际上传送这样场的数据报在现实中极少遇到。因为在数据链路层协议规定了一个数据帧的数据字段的最大长度，这称为<strong>最大传送单元MTU</strong>。每一个IP数据报越短，路由器转发的速度就越快。为此，IP协议规定，在互联网中所有的主机和路由器，<strong>必须能够接受长度不超过576字节的数据报</strong> 。</p>
+<p>​        数据报=512数据长度+最长60字节首部+4字节富余量</p>
+<p>在进行分片时，数据报首部中的“总长度”字段是指分片后的每一个分片的首部长度与该分片的数据长度的总和。在路由器转发超过576字节的数据报的时候，必须先<strong>了解一下目的主机能否接受所要发送数据报长度</strong>。</p>
+</li>
+<li><p><strong>标识</strong> 占16位。IP软件在存储器中维持一个计数器，没产生一个数据报，计数器就加1，并将此值赋给标识字段。“标识”并不是序号，因为IP是无连接服务，不存在按序接收的问题。当数据报分片时，这个标识字段的值就被复制到所有数据报片的标识字段中。最后相同标识字段的值重装成原来的数据报</p>
+</li>
+<li><p><strong>标志</strong> 占3位，目前只有两位有意义</p>
+<ul>
+<li>标志字段中的最低位记为<strong>MF</strong>。MF=1即标识后面“还有分片”的数据报。MF=0表示这是最后一个数据报片</li>
+<li>标志字段中间一位记为DF，意思是“不能分片”。只有当DF=0时才允许分片</li>
+</ul>
+</li>
+<li><p><strong>片偏移</strong> 占13位。较长的分组在分片后，某片在原分组中的相对位置。表示相对于用户数据字段的起点，该片从何处开始。每个分片的长度一定是8字节的整数倍</p>
+</li>
+<li><p><strong>生存时间</strong> 占8位，即TTL。表明数据报在网络中的寿命。防止数据报在网络中传播进入死循环。若数据报在路由器消耗的时间小于1秒，就把TTL值减1。当TTL减为0时丢弃数据报。</p>
+</li>
+<li><p><strong>协议</strong> 指出此数据报携带的数据使用何种协议，以便目的主机的ip层知道应将数据部分上交给哪个协议进行处理</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200513151015.png" alt="image-20200513150843235"></p>
+</li>
+<li><p><strong>首部校验和</strong> 占16位。<strong>这个字段只检验数据报的首部，不包括数据部分</strong>。数据报每经过一个路由器，路由器都要重新计算一下首部校验和。</p>
+</li>
+<li><p><strong>源地址</strong> 占32位</p>
+</li>
+<li><p><strong>目的地址</strong> 占32位</p>
+</li>
+</ol>
+<h3 id="2-4-2-IP数据报首部的可变部分"><a href="#2-4-2-IP数据报首部的可变部分" class="headerlink" title="2.4.2 IP数据报首部的可变部分"></a>2.4.2 IP数据报首部的可变部分</h3><p>IP数据报首部的可变部分就是一个选项字段。选项字段用来支持排错、测量以及安全等措施，内容很丰富。此字段的长度是可变，从1字节到40字节不等，取决于所选择的项目。有一些选项一个个拼接起来，中间不需要有分隔符，最后用全0的填充字段补全成为4字节的整数倍。</p>
+<p>增加首部的可变部分是为了增加IP数据报的功能，但这同时也使得IP数据报的首部长度成为可变的。这就增加了每一个路由器处理数据报的开销。实际上这些选项很少被使用，新的IPv6就把IP数据报的首部长度做成固定的。</p>
+<h2 id="2-5-IP层转发分组的流程"><a href="#2-5-IP层转发分组的流程" class="headerlink" title="2.5 IP层转发分组的流程"></a>2.5 IP层转发分组的流程</h2><p>路由器的路由表只记录每一条路由的信息：<strong>（目的网络地址，下一跳地址）</strong>，强调在互联网转发分组时，是从一个路由转发到下一个路由器</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201115213602.png" alt="IP分组转发"></p>
+<p>我们有以下结论：</p>
+<ul>
+<li>IP数据报一定可以找到目的主机所在网络上的路由器（可能要通过多次的间接交付）</li>
+<li>只有到达最后一个路由器时，才向目的主机进行直接交付</li>
+</ul>
+<p>虽然互联网所有的分组转发都是<strong>基于目的主机所在的网络</strong>，但在大多数情况下都允许对特定的目的主机指明一个路由。这种路由叫做<strong>特定主机路由</strong>，使网络管理人员更方便的控制网络和测试网络，同时也可在需要考虑某种安全问题时采用这种特定主机路由。在对网络的连接或路由表进行排错时，指明某一台主机的特殊路由就十分有用。路由器还可采用<strong>默认路由</strong>以减小路由表所占用的空间和搜索路由表所用的时间。这种转发方式在一个网络只有很少的对外连接时是很有用的。实际上，默认路由在主机发送IP数据报时往往更能显示出它的好处。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201115213651.png" alt="默认主机路由"></p>
+<h2 id="3-网际控制报文协议-ICMP"><a href="#3-网际控制报文协议-ICMP" class="headerlink" title="3 网际控制报文协议 ICMP"></a>3 网际控制报文协议 ICMP</h2><p>为了提高IP数据报交付成功的机会，在网际层使用了<code>网际控制报文协议ICMP</code>。ICMP允许主机或路由器报告差错情况和提供有关异常情况的报告。</p>
+<blockquote>
+<p>ICMP不是高层协议，而是ip层的协议。ICMP报文作为IP层数据报，加上数据报的首部，组成IP数据报发送出去。</p>
+</blockquote>
+<h3 id="ICMP报文的种类"><a href="#ICMP报文的种类" class="headerlink" title="ICMP报文的种类"></a>ICMP报文的种类</h3><p>ICMP的报文有两种：<code>ICMP差错报告报文</code>和<code>ICMP询问报文</code>。</p>
+<p><font style="color: #FF9966"><strong>ICMP差错报告报文</strong></font></p>
+<ul>
+<li>终点不可达。</li>
+<li>源点抑制。</li>
+<li>时间超过</li>
+<li>参数问题</li>
+<li>改变路由（重定向）</li>
+</ul>
+<p><font style="color: #FF9966"><strong>ICMP询问报文</strong></font></p>
+<ul>
+<li>回送请求报文和回答报文</li>
+<li>时间戳请求和回答报文</li>
+</ul>
+<h1 id="4-因特网的路由选择协议"><a href="#4-因特网的路由选择协议" class="headerlink" title="4 因特网的路由选择协议"></a>4 因特网的路由选择协议</h1><p>路由选择是个非常复杂的问题。它是网络中所有结点共同协调工作的结果。路由选择的环境往往是不断变化的，而这种变化有时无法事先知道。</p>
+<h2 id="4-1-自治系统AS"><a href="#4-1-自治系统AS" class="headerlink" title="4.1 自治系统AS"></a>4.1 自治系统AS</h2><blockquote>
+<p>定义：在单一的技术管理下的<strong>一组路由器</strong>，而这些路由器使用<strong>一种 AS 内部</strong>的路由选择协议和共同的度量以确定分组在该 AS 内的路由，同时还使用<strong>一种 AS 之间</strong>的路由选择协议用以确定分组在 AS之间的路由</p>
+</blockquote>
+<p>尽管一个 AS 使用了多种内部路由选择协议和度量，但重要的是一个 AS 对其他 AS 表现出的是一个单一的和一致的路由选择策略</p>
+<p><strong>因特网的两大类路由选择协议</strong>：<code>内部网关协议IGP</code>(如RIP、OSPF)和<code>外部网关协议EGP</code>(如BGP)</p>
+<h2 id="4-2-内部网关协议RIP"><a href="#4-2-内部网关协议RIP" class="headerlink" title="4.2 内部网关协议RIP"></a>4.2 内部网关协议RIP</h2><p>RIP是一种分布式的基于距离向量的路由选择协议。它要求网络中的每一个路由器都要维护它自己到其他每一个目的网络的<strong>距离记录</strong>。</p>
+<blockquote>
+<p>距离的定义：从一路由器到直接连接的网络的距离定义为1，RIP中的距离也称为跳数。</p>
+</blockquote>
+<p>RIP<strong>允许一条路径最多只能包含15个路由器</strong>，当距离的最大值为16时即相当于不可达。RIP只选择一个具有最少路由器的路由，哪怕还存在另一条高速(低延迟)但路由器多的路由。</p>
+<h3 id="RIP协议的三个要点"><a href="#RIP协议的三个要点" class="headerlink" title="RIP协议的三个要点"></a>RIP协议的三个要点</h3><ul>
+<li><strong>仅和相邻路由器交换信息</strong></li>
+<li><strong>交换的信息是当前本路由器所知道的全部信息</strong>，即自己的路由表</li>
+<li><strong>按固定的时间间隔交换路由信息</strong>，例如每隔30秒</li>
+</ul>
+<p>在路由表刚刚开始工作时，它的路由表是空的，然后路由器就得出到直接相连的几个网络的距离，接着再一步步更新</p>
+<p>RIP<strong>存在的一个问题</strong>是当网络出现故障的时候，要经过比较长的时间才能将此信息传送到所有的路由器。即<strong>坏消息传播的慢</strong>。</p>
+<h2 id="4-3-内部网关协议OSPF"><a href="#4-3-内部网关协议OSPF" class="headerlink" title="4.3 内部网关协议OSPF"></a>4.3 内部网关协议OSPF</h2><p>OSPF(<code>开放最短路径优先OSPF</code>)是分布式的<strong>链路状态协议</strong>，是为了克服RIP协议的缺点开发出来的。</p>
+<h3 id="具体步骤"><a href="#具体步骤" class="headerlink" title="具体步骤"></a>具体步骤</h3><ol>
+<li><p>向本自治系统中所有路由器使用<code>洪泛法</code>发送消息，获得消息的路由器又再将此信息发往其所有的相邻路由器。直到整个区域的路由器都得到这个消息的副本</p>
+</li>
+<li><p>发送的信息就是与本路由器相邻的所有路由器的链路状态，但只有<strong>一部分</strong>。链路状态就是说明本路由器都和哪些路由器相邻，以及该链路的<code>度量</code>(费用、距离、时延、带宽等)</p>
+</li>
+<li><p>只有当链路状态发生变化的时候，路由器才向所有路由器用洪泛法发送此信息。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201115202517.png" alt="OSPF区域"></p>
+</li>
+</ol>
+<p>OSPF使用层次结构的区域划分，在上层的区域叫做主干区域，主干区域的作用是用来连通其他在下层的区域。从其他区域来的信息都有<code>区域边界路由器</code>进行概括。R3,R7,R4就是区域边界路由器。OSPF与RIP不同，它不使用UDP协议，而是IP数据报直接传送，OSPF构成的数据报非常短。</p>
+<p>为了确保链路状态数据库与全网的状态保持一致，OSPF还规定每隔一段时间就刷新一次数据库中的链路状态。</p>
+<h2 id="4-3-外部网关协议BCG"><a href="#4-3-外部网关协议BCG" class="headerlink" title="4.3 外部网关协议BCG"></a>4.3 外部网关协议BCG</h2><p>内部网关协议主要是设法使数据报在一个AS中尽可能有效地从源站传送到目的站。在一个AS内部也不需要考虑其他方面的策略。但BCG不同，主要有下面两个原因：</p>
+<ol>
+<li><strong>互联网的规模太大</strong>，使得自治系统AS之间路由选择非常困难。如果使用链路状态协议，每一个路由器必须维护一个非常大的链路状态数据库。对主干网用Dijkstra算法效率也非常低</li>
+<li>自治系统AS<strong>之间的路由选择必须考虑有关策略</strong>。由于相互连接的网络的性能相差很大，根据最短距离找出来的路径可能并不合适。</li>
+</ol>
+<p>基于上面两个问题，边界网关协议BGP只能是力求寻找一条能够到达目的网络且比较好的路由，而并非要寻找一条最佳路由。BGP采用<code>路径向量路由选择协议</code>。</p>
+<p>每个自治系统的管理员至少选择一个路由器作为<strong>该自治系统的BGP发言人</strong>。一个BGP发言人要与其他AS的BGP发言人交换路由信息，就要先建立TCP连接。然后交换路由信息，如加入了一条路由等等。</p>
+<p>当BGP发言人互相交换了网络可达性信息的时候，各BGP发言人就根据所采用的策略从收到的路由信息中找出到达各自治系统的较好路由</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201115204736.png" alt="AS的连通图"></p>
+<h1 id="5-IP多播"><a href="#5-IP多播" class="headerlink" title="5 IP多播"></a>5 IP多播</h1><h2 id="网际组管理协议IGMP"><a href="#网际组管理协议IGMP" class="headerlink" title="网际组管理协议IGMP"></a>网际组管理协议IGMP</h2><p>为了使路由器知道多播组成员的信息，需要使用<code>网际组管理协议IGMP</code>。IGMP协议使让连接在本地局域网上的多播路由器知道本局域网上是否有主机（上的某个进程）参加或退出了某个多播组。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201115204939.png" alt="ip多播"></p>
+<p>从概念上将，IGMP的工作可分为两个阶段：</p>
+<ul>
+<li>当某台主机加入多播组的时候，该主机应向多播组的多播地址发送一个IGMP报文，声明自己要成为改组的成员，本地的多播路由器收到IGMP报文后，还要利用多播路由选择协议把这种组成员关系转发给互联网上的其他多播路由器</li>
+<li>组成员关系是动态的，本地多播路由器周期性地探询本地局域网上的主机，以便直到这些主机是否还继续是组的成员。</li>
+</ul>
+<h2 id="多播路由选择协议"><a href="#多播路由选择协议" class="headerlink" title="多播路由选择协议"></a>多播路由选择协议</h2><blockquote>
+<p>多播路由选择协议还未标准化。</p>
+</blockquote>
+<p>多播路由选择实际上就是找出以源主机为根节点的多播转发树。在多播转发树上，每一个多播路由器向树的叶节点方向转发受到的多播数据报。</p>
+<p>在已有的多种多播路由器选择协议中，采用了以下3种方法：</p>
+<ol>
+<li><p>洪泛与剪除(适合小的多播组)</p>
+</li>
+<li><p>隧道技术(适用于地理上很分散的情况)。就是对多播数据报进行封装，再加上普通数据报首部，使之成为向单一目的站发送的单播数据报，称为隧道。<img src="https://gitee.com/yovette/Images/raw/master/img/20201115210511.png" alt="隧道技术在多播中的应用"></p>
+</li>
+<li><p>基于核心的发现技术。每一个多播组指定一个核心路由器，给出它的IP单播地址。核心路由器创建出多播组的转发树。</p>
+</li>
+</ol>
+<h1 id="其他的一些常用协议"><a href="#其他的一些常用协议" class="headerlink" title="其他的一些常用协议"></a>其他的一些常用协议</h1><h2 id="虚拟专用网VPN"><a href="#虚拟专用网VPN" class="headerlink" title="虚拟专用网VPN"></a>虚拟专用网VPN</h2><p>实际上VPN就是通过本网络与其他网络共享一个全球ip，通过虚拟机专用网VPN完成本网络访问访问不到的东西。例如YouTube使用日本电信的一个全球ip可以轻松访问。我们可以使用VPN将本网络的数据报发送给全球ip的路由器即可。实际上还是通过公用的互联网。</p>
+<p>专用网设计初衷实际上是为了<strong>那些没有需要访问互联网，但是需要和本网络中的其他主机通信</strong>。用以节省宝贵的全球ip</p>
+<h2 id="网络地址转换协议NAT"><a href="#网络地址转换协议NAT" class="headerlink" title="网络地址转换协议NAT"></a>网络地址转换协议NAT</h2><p>如果专用网内部的一些主机本来已经分配本地IP地址，又想和互联网上的主机通信，就需要通过网络地址转换协议NAT。</p>
+<p>需要在专用网连接到互联网的路由器上安装NAT软件，NAT路由器至少有一个有效的外部全球IP地址。这样本地地址可以转换成全球IP地址。</p>
+<p>当NAT路由器具有n个全球ip地址时，专用网内最多可以同时有n台主机接入到互联网。这样就可以使专用网内较多数量的主机，轮流使用NAT路由器有限数量的全球IP地址。</p>
+<blockquote>
+<p>现在NAT用上了端口，因此可以一个NAT路由器上的全球IP地址可以同时和多个拥有本地地址的主机进行通信。</p>
+</blockquote>
+]]></content>
+      <categories>
+        <category>计算机网络</category>
+      </categories>
+      <tags>
+        <tag>计算机网络</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java多线程(1) Java内存模型</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/2%20java%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/</url>
+    <content><![CDATA[<p>Java的内存可见性很容易困扰着Java程序员，本文就是着重讲诉Java的内存可见性问题</p>
+<span id="more"></span>
+
+<h1 id="Java内存模型"><a href="#Java内存模型" class="headerlink" title="Java内存模型"></a>Java内存模型</h1><h2 id="Java内存模型的基础"><a href="#Java内存模型的基础" class="headerlink" title="Java内存模型的基础"></a>Java内存模型的基础</h2><h3 id="Java并发编程的两个关键性问题"><a href="#Java并发编程的两个关键性问题" class="headerlink" title="Java并发编程的两个关键性问题"></a>Java并发编程的两个关键性问题</h3><p>​    在并发编程中，需要处理两个关键性问题：<strong>线程之间如何通信</strong>及<strong>线程之间如何同步</strong>。通信是指线程之间以何种机制来交换信息，在命令式编程中，线程之间的通信机制有两种：**<code>共享内存</code><strong>和</strong><code>消息传递</code>**。</p>
+<p>​    在共享内存的并发模型里，线程之间共享程序的公共状态，通过<strong>写-读状态完成隐式通信</strong>。而在消息传递的并发模型里，线程之间没有公共状态，线程之间必须通过发送消息来显示进行通信。</p>
+<p>​    同步是指程序中用于控制不同线程间操作发生相对顺序的机制。在共享内存并发模型里，同步是显示进行的。程序员必须显示指定某个方法或某段代码需要在线程之间互斥执行。在消息传递的并发模型里，由于消息的发送必须在消息的接  收之前，因此同步是隐式进行的。</p>
+<p>​    Java的并发采用的是共享内存模式，Java线程之间的通信总是隐式进行的，整个通信过程对程序员完全透明。编写多线程程序就需要理解隐式进行的线程之间通信的工作。</p>
+<h3 id="Java内存模型的抽象结构"><a href="#Java内存模型的抽象结构" class="headerlink" title="Java内存模型的抽象结构"></a>Java内存模型的抽象结构</h3><p>在Java中，所有实例域、静态域和数组元素都存储在堆内存中，堆内存在线程之间共享。局部变量、方法定义参数和异常处理器参数不会在线程之间共享，不会有内存可见性问题，也不受内存模型的影响。</p>
+<p>Java线程之间的通信由<code>Java内存模型（JMM）</code>控制，JMM决定一个线程对共享变量的写入何时对另一个线程可见。从抽象的角度来看，JMM定义了线程和主内存之间的抽象关系：<strong>线程之间的共享变量存储在主内存中，每个线程都有一个私有的本地内存，本地内存中存储了该线程以读/写共享变量的副本。本地内存是JMM的一个抽象概念，并不真实存在</strong>。它涵盖了缓存、写缓冲区、寄存器已经其他的硬件和编译器优化。</p>
+<p>抽象结构如下图：</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715101024.png" alt="image-20200715101016387"></p>
+<p>线程A与线程B的通信，需要经过两个步骤：</p>
+<ul>
+<li><p>线程A把本地内存A中更新过的共享变量刷新到主内存中去</p>
+</li>
+<li><p>线程B到主内存中去读取线程A之前已更新过的值。</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715102424.png" alt="image-20200715102422782"></p>
+</li>
+</ul>
+<p>​         由上图可见，JMM是通过控制主内存与每个线程的本地内存之间的交互，来为Java程序员提供内存可见性的保证的。</p>
+<h3 id="从源代码到指令序列的重排序"><a href="#从源代码到指令序列的重排序" class="headerlink" title="从源代码到指令序列的重排序"></a>从源代码到指令序列的重排序</h3><p>在执行程序时，为了提高性能，编译器和处理器常常会对指令做重排序。重排序分为三个种类：</p>
+<ul>
+<li><p><strong>编译器优化的重排序</strong>：在不改变<strong>单线程</strong>语义的前提下，可以重新安排语句的执行顺序</p>
+</li>
+<li><p><strong>指令级重排序</strong>：现代处理器采用**<code>指令级并行技术</code>**来将多条指令重叠执行。如果不存在数据依赖性，处理器可以该改变语句对应机器指令的执行顺序</p>
+</li>
+<li><p><strong>内存系统的重排序</strong>：由于处理器使用缓存和读/写缓冲区，这使得加载和存储操作看上去可能是在乱序执行。</p>
+<p>从Java源代码到最终实际执行的指令序列，会分别经历下面3中重排序。</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715103857.png" alt="image-20200715103856241"></p>
+<p>1属于编译器重排序，2和3属于处理器重排序。这些重排序可能会导致多线程程序的内存可见性问题。</p>
+<p>对于编译器，JMM的编译器重排序规则会禁止特定类型的编译器重排序（不是所有的编译器重排序都要禁止）。对于处理器重排序，JMM的处理器重排序规则会要求Java编译器在生成指令序列时，会插入特定的<strong>内存屏障</strong>（Memory Barries， Intel称之为Memory Fench）指令，通过内存屏障指令来禁止特定类型的处理器重排序。</p>
+<p>JMM属于语言级的内存模型，他确保在不同编译器和不同的处理器平台之上，通过禁止特定类型的编译器重排序和处理器重排序，为程序员提供一致的内存可见性保证。</p>
+</li>
+</ul>
+<h3 id="并发编程模型的分类"><a href="#并发编程模型的分类" class="headerlink" title="并发编程模型的分类"></a>并发编程模型的分类</h3><p>现代处理器使用写缓冲区临时保存向内存写入的数据。<strong>写缓冲区可以保证指令流水线持续运行</strong>，用于<strong>避免由于处理器停顿下来等待向内存写入数据而产生的延迟</strong>。同时通过以批处理的方式刷新缓冲区，以及合并写缓冲区中对同一内存地址的多次写，<strong>减少堆内存总线的占用</strong>。</p>
+<p>虽然写缓冲区的好处很多，但每个处理器上的写缓冲区，<strong>仅仅对它所在的处理器可见</strong>！这个特性会对内存操作的执行顺序产生重要的影响：处理器对内存的读/写操作的执行顺序，不一定与内存实际发生的读/写操作顺序一致。见下图：<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715144224.png" alt="处理器操作内存的执行结果"></p>
+<p>原因见下图：<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715144430.png" alt="操作内存导致结果不一致的原因"></p>
+<p>  关键原因就是：<strong>写缓冲区仅对自己的处理器可见</strong>，它会导致处理器执行内存操作的顺序可能和内存实际操作顺序不一致。由于现代的处理器都会使用写缓冲区，故而现代的处理器都会允许对写-读操作进行重排序。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201017220247.png" alt="常见处理器的重排序规则"></p>
+<p>为了保证内存可见性，在硬件层面提供了两类屏障：<code>Load Barries</code>和<code>Store Barries</code></p>
+<ul>
+<li><code>Load Barries</code>：让高速缓存中的所有数据失效，强制从主内存加载数据</li>
+<li><code>Store Barries</code>：让写缓冲区的最新数据写入到内存，让其他线程可见</li>
+</ul>
+<p>Java编译器在生成指令序列的适当位置会插入内存屏障指令来禁止特定类型的处理器重排序。JMM将内存屏障指令分为4类，如下表所示：</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201018140304.png" alt="内存屏障指令"></p>
+<p><code>StoreLoad Barries</code>屏障同时具有3个屏障的效果，现代多处理器大多支持该屏障。执行该屏障开销会很昂贵，因为当前处理器通常要把写缓冲区中的数据全部刷新到内存中。</p>
+<h3 id="happens-before简介"><a href="#happens-before简介" class="headerlink" title="happens-before简介"></a>happens-before简介</h3><p>  JSR-133使用<strong>happens-before的概念来阐述操作之间的内存可见性</strong>。在JMM中，如果一个操作执行的结果需要对另一个操作可见，那么这两个操作之间必须要存在happens-before关系。这里提到的两个操作既可以是在一个线程之内，也可以是在不同线程之间。</p>
+<p>  happens-before规则如下：</p>
+<ul>
+<li><strong>程序顺序规则</strong>：一个线程中的每个操作，happens-before于该线程中的任意后续操作。</li>
+<li><strong>监视器锁规则</strong>：对一个锁的解锁，happens-before于随后对这个锁的加锁。</li>
+<li><strong>volatile变量规则</strong>：对一个volatile域的写，happens-before于任意后续对这个volatile域的任意后续对这个volatile域的读。</li>
+<li><strong>传递性</strong>：如果A happens-before B，且B happens-before C，那么A happens-before C。</li>
+</ul>
+<p>🔺：两个操作之间具有happens-before关系，并不意味着前一个操作必须要在后一个操作之前执行！仅仅要求前一个操作（执行的结果）对后一个操作可见，且前一个操作按顺序排在第二个操作之前。只要结果一致(参见结果一致性)，JMM会认为这种重排序并不非法。</p>
+<p>一个happens-before规则对应于一个或多个编译器和处理器重排序规则。happens-before规则简单易懂，不需要Java程序员为了理解JMM提供的内存可见性保证而去学习复杂的重排序规则以及这些规则的具体实现方法。</p>
+<h2 id="重排序"><a href="#重排序" class="headerlink" title="重排序"></a>重排序</h2><p>重排序是编译器和处理器为了优化程序性能而对指令序列进行重新排序的一种手段</p>
+<h3 id="数据依赖性"><a href="#数据依赖性" class="headerlink" title="数据依赖性"></a>数据依赖性</h3><p>  如果两个操作访问同一个变量，且这两个操作中有一个为写操作，此时这两个操作之间就存在数据依赖性</p>
+<p>  编译器和处理器不会对有数据依赖性的两个操作进行重排序。这里所说的<strong>数据依赖性仅针对单个处理器中执行的指令序列和单个线程中执行的操作</strong>。不同处理器之间和不同线程之间的数据依赖性不被编译器和处理器考虑。</p>
+<h3 id="as-if-serial语义"><a href="#as-if-serial语义" class="headerlink" title="as-if-serial语义"></a>as-if-serial语义</h3><p>  <code>as-if-serial</code>的意思是：不管怎么重排序，（单线程）程序的执行结果不能被改变。编译器、runtime和处理器都必须遵守as-is-serial语义。</p>
+<p>  如上文所说，编译器和处理器不会对存在数据依赖关系的操作做重排序，因为这种重排序会改变执行结果。但是如果操作之间不存在数据依赖关系，这些操作就可能编译器和处理器重排序，不过这种重排序不会改变最终的执行结果</p>
+<h3 id="重排序对多线程的影响"><a href="#重排序对多线程的影响" class="headerlink" title="重排序对多线程的影响"></a>重排序对多线程的影响</h3><p>看如下代码</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">ReorderExample</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> a = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">boolean</span> flag = <span class="keyword">false</span>;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">write</span><span class="params">()</span></span>&#123;</span><br><span class="line">    	a = <span class="number">1</span>;</span><br><span class="line">        flag = <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">reader</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">if</span>(flag) &#123;</span><br><span class="line">            <span class="keyword">int</span> i = a*a;</span><br><span class="line">            ...</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>假设有两个线程A和B，A执行write方法，B执行reader方法。线程在执行if里面的语句时，能否看到线程A对a变量的写入呢？</p>
+<p>答案是：<strong>不一定能看到</strong>。write方法中的两个语句没有明显的数据以来关系，编译器和处理器可以对两个操作重排序；见下图：<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200715164006.png" alt="image-20200715163950028"></p>
+<p>这时多程序程序的语义就被破坏了。</p>
+<p><strong>解决方法</strong>：利用happens-before规则中的volatile</p>
+<h2 id="顺序一致性"><a href="#顺序一致性" class="headerlink" title="顺序一致性"></a>顺序一致性</h2><p>顺序一致性是一种理论参考模型，在设计的时候作为参照。</p>
+<h3 id="数据竞争与顺序一致性"><a href="#数据竞争与顺序一致性" class="headerlink" title="数据竞争与顺序一致性"></a>数据竞争与顺序一致性</h3><p>当程序未正确同步时，就可能存在数据竞争。Java内存模型规范对数据竞争的定义如下：</p>
+<ul>
+<li>在一个线程中写一个变量</li>
+<li>在另一个线程读同一个变量</li>
+<li>而且写和读没有通过同步来排序</li>
+</ul>
+<p>当代码中包含数据竞争时，程序的执行往往产生违反直觉的结果。<strong>如果一个多线程程序能够正确同步，这个程序将是一个没有数据竞争的程序</strong>。</p>
+<p>JMM对正确同步的多线程程序的内存一致性做了如下保证：</p>
+<p>如果程序时正确同步的，程序的执行将具有顺序一致性——即程序的执行结果与理论上的顺序一致性内存模型的执行结果相同。</p>
+<h3 id="顺序一致性内存模型"><a href="#顺序一致性内存模型" class="headerlink" title="顺序一致性内存模型"></a>顺序一致性内存模型</h3><p>顺序一致性内存模型是一个被计算机科学家理想化的理论参考模型，为程序员提供了机枪的内存可见性保证。顺序一致性内存模型有两个特性：</p>
+<ul>
+<li>一个线程中的所有操作必须按照程序的顺序来执行</li>
+<li>（不管程序是否同步）所有线程都只能看到一个单一的操作执行顺序。在顺序一致性内存模型中，每个操作都必须原子执行且立刻对所有线程可见。</li>
+</ul>
+<p>但是JMM中没有这个保证。未同步程序在JMM中不但整体执行顺序是无序的，而且所有线程看到的操作执行顺序也可能不一致。比如当前线程写操作，但是没有刷新进内存中。其他线程看到的顺序就与当前线程不一致。</p>
+<h3 id="同步程序的顺序一致性效果"><a href="#同步程序的顺序一致性效果" class="headerlink" title="同步程序的顺序一致性效果"></a>同步程序的顺序一致性效果</h3><p>最前面的示例<code>ReorderExample</code>用锁来同步，看看正确同步的程序如何具有顺序一致性。</p>
+<p>示例代码：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SynchronizedExample</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> a = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">boolean</span> flag = <span class="keyword">false</span>;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">writer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        a = <span class="number">1</span>;</span><br><span class="line">        flag = <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">reader</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (flag) &#123;</span><br><span class="line">            <span class="keyword">int</span> i = a;</span><br><span class="line">            System.out.println(i);</span><br><span class="line">      	&#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>  假设A线程执行writer方法之后，B线程执行reader方法。这是一个正确同步的多线程程序。该程序的执行结果与顺序一致性模型中的执行结果相同。</p>
+<p>  顺序一致性模型中，所有操作完全按程序的顺序串行执行.而在JMM中，临界区内的代码可以重排序（由于happens-before中监视器的语义，临界区内的代码不允许溢出到临界区之外）JMM会在退出临界区和进入临界区这两个关键的时间点做一些特别处理，使得线程在这两个时间点具有与顺序一致性模型相同的内存视图。</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200716145806.png" alt="image-20200716145758510"></p>
+<p>JMM在具体实现上的基本方针为：在不改变程序执行结果的前提下，尽可能地为编译器和处理器地优化打开方便之门。</p>
+<h3 id="未同步程序的执行特性"><a href="#未同步程序的执行特性" class="headerlink" title="未同步程序的执行特性"></a>未同步程序的执行特性</h3><p>  对于未同步或未正确同步的多线程程序，JMM只提供最小安全性：<strong>线程执行时读取到的值，要么是之前某个线程写入的值，要么是默认值</strong>（0， null， false），JMM保证线程读操作读取到的值不会无中生有的冒出来。为了实现最小安全性，JVM在堆上分配对象时，首先会对内存空间进行清0，然后才会在上面分配对象（JVM内部会同步这两个操作）。因此，在已清零的内存空间分配对象时，域的默认初始化已经完成了。</p>
+<p>  JMM不保证未同步的执行结果与顺序一致性模型上的执行结果一致。因为如果想要保证执行结果的一直，JMM需要禁止大量的处理器和编译器的优化，对程序的执行性能有很大的影响。</p>
+<p>  <strong>未同步程序在两个模型中的执行特性有如下几个差异</strong></p>
+<ul>
+<li>顺序一致性模型保证单线程操作会按程序的顺序执行，而JMM不保证单线程内的操作会按程序的顺序执行。</li>
+<li>顺序一致性模型保证所有线程只能看到一致的操作执行顺序。而JMM不保证所有线程能看到一致的操纵执行顺序。</li>
+<li><strong>JMM不保证对64位的long型和double型变量的写操作具有原子性</strong>，而顺序一致性模型保证对所有的内存读/写操作都具有原子性</li>
+</ul>
+<p>第三个差异与处理器总线的工作机制密切相关。在计算机中，数据通过总线在处理器和内存之间传递。每次处理器和内存之间的数据传递都是通过一系列步骤来完成的，这一系列步骤称之为<strong>总线事务</strong>。总线事务包括<strong>读事务</strong>和<strong>写事务</strong>。总线会同步试图并发使用总线的事务。在一个处理器执行总线事务期间，总线会禁止其他的处理器和I/O设备执行内存的读/写。总线工作机制如下图：<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200716162905.png" alt="总线的工作机制"></p>
+<p>  如上图，总线就是将所有处理器对内存的访问以串行化的方式来执行。在任意时间点，最多只能有一个处理器可以访问内存。这个特性确保了单个总线事务之中的内存读、写操作具有原子性。</p>
+<p>  基于上面所说的，在一些32位处理器上，如果要求对64位数据进行写操作具有原子性，会有较大的开销。为了照顾这类处理器，Java语言规范鼓励但不强求JVM对64位的数据的写操作具有原子性。64位的数据可能被拆为两个32位的数据，但是这样会出现一些意想不到的问题，见下图：<img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200716162913.png" alt="总线事务执行的时序图"></p>
+<p>  从JSR-133开始，仅仅只允许把一个64位long/double型变量的写操作拆分为两个32位的写操作来执行，任意的读操作都必须具有原子性。而JSR-133之前读操作是允许一个64位long/double型变量的拆分的。</p>
+<h2 id="volatile的内存语义"><a href="#volatile的内存语义" class="headerlink" title="volatile的内存语义"></a>volatile的内存语义</h2><p><img src="https://gitee.com/yovette/Images/raw/master/img/20200716170518.png" alt="image-20200716164943584"></p>
+<p><code>volatile</code>变量特性：</p>
+<ol>
+<li>可见性：对一个volatile变量的读，总是能看到任意线程对这个volatile变量最后的写入。</li>
+<li>原子性：对任意单个volatile变量的读写具有原子性，但类似于volatile++这种复合操作不具有原子性。</li>
+</ol>
+<h3 id="volatile读写建立的happens-befores关系"><a href="#volatile读写建立的happens-befores关系" class="headerlink" title="volatile读写建立的happens-befores关系"></a>volatile读写建立的<code>happens-befores</code>关系</h3><p>volatile对线程的内存可见性的影响比自身的特性更为重要。</p>
+<p>从JDK5开始，volatile读写可以实现线程之间的通信。</p>
+<p>从内存语义的角度来说，volatile的写-读与锁的释放-获取有相同的内存效果</p>
+<p>观察下面的volatile变量的示例代码：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">VolatileExample</span></span>&#123;</span><br><span class="line">    <span class="keyword">int</span> a = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">volatile</span> <span class="keyword">boolean</span> flag = <span class="keyword">false</span>;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">writer</span><span class="params">()</span></span>&#123;</span><br><span class="line">        a = <span class="number">1</span>;			<span class="comment">//1</span></span><br><span class="line">        flag = <span class="keyword">true</span>;	<span class="comment">//2</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">reader</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (flag) &#123;		<span class="comment">//3</span></span><br><span class="line">            <span class="keyword">int</span> i = a;	<span class="comment">//4</span></span><br><span class="line">            ...</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>假设线程A执行了writer()方法之后，线程B执行reader()方法。根据<code>happens-before</code>规则，这个过程建立的<code>happens-before</code>关系可以分为3类</p>
+<ol>
+<li>根据程序次序规则，1<code>happens-before</code>2;3<code>happens-before</code>4;</li>
+<li>根据volatile规则，2<code>happens-before</code>3;</li>
+<li>根据<code>happens-before</code>的传递性规则，1<code>happens-before</code>4;</li>
+</ol>
+<p>A线程写一个volatile变量后，B线程读同一个volatile变量，该volatile变量对B线程立刻可见。</p>
+<h3 id="volatile写-读内存语义"><a href="#volatile写-读内存语义" class="headerlink" title="volatile写-读内存语义"></a>volatile写-读内存语义</h3><p>写内存语义：当写一个volatile变量时，JMM会把该线程对应的本地内存中的共享变量值刷新到主内存。</p>
+<blockquote>
+<p>volatile的内存语义是通过内存屏障实现的</p>
+</blockquote>
+<p>读内存语义：当读一个volatile变量时，JMM会将该线程对应的本地缓存置为无效，线程接下来将从主内存中读取共享变量。</p>
+<h3 id="volatile内存语义的实现"><a href="#volatile内存语义的实现" class="headerlink" title="volatile内存语义的实现"></a>volatile内存语义的实现</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201018153317.png" alt="volatile重排序规则表"></p>
+<p>JMM对volatile读写采取了保守策略的内存屏障插入策略</p>
+<ul>
+<li>在每个volatile写操作的前面插入一个<code>StoreStore</code>屏障，每个写操作后面插入一个<code>StoreLoad</code>屏障</li>
+<li>在每个volatile读操作的前面插入一个<code>LoadLoad</code>屏障，每个读操作后面插入一个<code>LoadStore</code>屏障</li>
+</ul>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201018154059.png" alt="指令序列图"></p>
+<h3 id="JDK5为什么要增强volatile的内存语义？"><a href="#JDK5为什么要增强volatile的内存语义？" class="headerlink" title="JDK5为什么要增强volatile的内存语义？"></a>JDK5为什么要增强volatile的内存语义？</h3><p>JDK5以后volatile就支持了同步问题。这是因为旧的volatile虽然不允许volatile之间重排序，但允许volatile变量与普通变量重排序</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201018154839.png" alt="线程执行时序图"></p>
+<p>旧的内存模型中，当1和2之间没有数据依赖关系时，1和2就可能被重排序，其结果就是：B执行4时不一定能看到线程A在执行1时对共享变量的修改，很明显这是无法保证线程之间的通信安全的。为了提供一种比锁更轻量级的线程之间的通信机制，JSP-133专家组决定增强volatile的内存语义：严格限制编译器和处理器对volatile变量与普通变量的重排序，确保volatile的写读操作和锁的释放获取又相同的内存语义。</p>
+<h2 id="锁的内存语义"><a href="#锁的内存语义" class="headerlink" title="锁的内存语义"></a>锁的内存语义</h2><p>锁是Java并发编程中最重要的同步机制。锁除了让临界区互斥执行外，还可以让释放锁的线程向同一个锁的线程发送消息。</p>
+<p>即监视器锁规则：线程A释放了锁之后，线程B获取了同一个锁，这时A在释放锁之前所有可见的共享变量，在B获取同一个锁之后，将立刻变得对B线程可见</p>
+<h3 id="锁释放和获取的内存语义"><a href="#锁释放和获取的内存语义" class="headerlink" title="锁释放和获取的内存语义"></a>锁释放和获取的内存语义</h3><ul>
+<li>当线程释放锁时，JMM会把该线程对应的本地内存中的共享变量刷新到主内存中。</li>
+<li>当线程获取锁时，JMM会把线程对应的本地内存置为无效，强制从主内存中读取共享变量。</li>
+</ul>
+<p>当A线程释放锁，实质上是A向接下来获取锁的线程发出来消息；</p>
+<p>当B线程得到锁，实质上是B接受了之前某个线程发出的信息。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><h2 id="JDK5对旧内存模型的修补"><a href="#JDK5对旧内存模型的修补" class="headerlink" title="JDK5对旧内存模型的修补"></a>JDK5对旧内存模型的修补</h2><p>JSR-133对JDK5之前的就内存模型的修补主要有两个</p>
+<ul>
+<li>增强<code>volatile</code>语义。旧内存模型允许<code>volatile</code>变量与普通变量重排序。JSR-133限制了<code>volatile</code>与普通变量的重排序</li>
+<li>增强了<code>final</code>语义。旧内存模型多次读取同一个final变量的值可能会不相同。为此JSR-133为final增加了两个重排序规则。在保证final引用不会从构造函数内逸出的情况下，final具有了初始化安全性</li>
+</ul>
+]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java多线程(2) Java多线程底层原理</title>
+    <url>/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/3%20%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%9A%84%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86/</url>
+    <content><![CDATA[<blockquote>
+<p>Java代码在编译后会变成Java字节码，字节码被类加载器加载到JVM里，JVM执行字节码，最终需要转化为汇编指令在CPU上执行，Java中所使用的并发机制依赖于JVM的实现和 CPU的指令。本章我们将深入底层一起探索下Java并发机制的底层实现原理</p>
+<p>——java并发编程的艺术</p>
+</blockquote>
+<span id="more"></span>
+
+<h2 id="volatile关键字"><a href="#volatile关键字" class="headerlink" title="volatile关键字"></a>volatile关键字</h2><p>并发编程中synchronized和volatile都扮演着重要的角色，volatile是轻量级的synchronized，他在多线程的开发中保证了共享变量的内存可见性。可见性是指，一个线程在修改一个共享变量时，另外一个线程能读到这个修改的值，而不是内存或者CPU缓存的值。volatile不会引起线程上下文的切换和调度。</p>
+<h3 id="volatile的定义与实现原理"><a href="#volatile的定义与实现原理" class="headerlink" title="volatile的定义与实现原理"></a>volatile的定义与实现原理</h3><h5 id="定义"><a href="#定义" class="headerlink" title="定义"></a>定义</h5><p>java语言规范第三版对volatile的定义如下：Java编程语言允许线程访问共享变量，为了确保共享变量能被准确和一致地更新，线程应该确保通过排他锁单独获得这个变量。Java语言 提供了volatile，在某些情况下比锁要更加方便。如果一个字段被声明成volatile，Java线程内存模型确保<strong>所有线程看到这个变量的值是一致的</strong>。</p>
+<h5 id="volatile有关的CPU术语"><a href="#volatile有关的CPU术语" class="headerlink" title="volatile有关的CPU术语"></a>volatile有关的CPU术语</h5><p>在了解volatile的原理之前，我们需要看下与其实现原理相关的CPU术语与说明</p>
+<table>
+<thead>
+<tr>
+<th>术语</th>
+<th>英文单词</th>
+<th>术语描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>内存屏障</td>
+<td>memory barriers</td>
+<td>是一组处理器指令，用于实现对内存操作的顺序限制</td>
+</tr>
+<tr>
+<td>缓冲行</td>
+<td>cache line</td>
+<td>缓存中最小的存储单位，处理器填写缓存线时会加载整个缓存线，需要使用多个主内存读周期（伪共享的关键原因）</td>
+</tr>
+<tr>
+<td>原子操作</td>
+<td>atomic operations</td>
+<td>不可中断的一个或一系列操作</td>
+</tr>
+<tr>
+<td>缓存行填充</td>
+<td>cache line fill</td>
+<td>当处理器识别到从内存中读取操作数是可缓存的，处理器读取整个缓存行到适当的缓存(L1,L2,L3或所有)</td>
+</tr>
+<tr>
+<td>缓存命中</td>
+<td>cache hit</td>
+<td>如果进行高速缓存行填充操作的内存位置仍然是下次处理器访问的地址时，处理器从缓存中读取操作数，而不是从内存中读取（读操作）</td>
+</tr>
+<tr>
+<td>写命中</td>
+<td>write hit</td>
+<td>当处理器将操作数写回到一个内存缓存的区域时，他首先会检查这个缓存的内存地址是否在缓存行中，如果存在一个有效的缓存行，则处理器将这个操作数写回缓存，而不是写回到内存，这个操作被称为写命中（写操作）</td>
+</tr>
+<tr>
+<td>写缺失</td>
+<td>write misses the cache</td>
+<td>一个有效的缓存行被写入到不存在的内存区域（写之前缓冲区没有操作数的缓存）</td>
+</tr>
+</tbody></table>
+<p>那么volatile是如何保证内存可见性的呢？我们在X86处理器下通过工具获取到JIT编译器生成的汇编指令来查看对volatile进行写操作，CPU会做什么事情</p>
+<p>Java代码如下：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">instance = <span class="keyword">new</span> Singleton()                  <span class="comment">//instance是volatile变量</span></span><br></pre></td></tr></table></figure>
+
+<p>转变成汇编代码，如下：</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">0x01a3de1d: movb $0×0,0×1104800(%esi);0x01a3de24: lock addl $0×0,(%esp);</span><br></pre></td></tr></table></figure>
+
+<p>有volatile关键字修饰的共享变量进行写操作的时候会多出第二行汇编代码，<code>Lock</code>前缀的指令在多核处理器会引发两件事情：</p>
+<ul>
+<li><strong>将当前处理器缓存行的数据写回到系统内存</strong></li>
+<li><strong>这个写回内存的操作会使在其他CPU里缓存了该内存地址的数据无效</strong></li>
+</ul>
+<p>这就是Lock指令保证了CPU缓存的一致性。当处理器对被volatile关键字修饰的变量修改时，会重新从系统内存中把数据读到处理器缓存里。</p>
+<h5 id="volatile的实现原则"><a href="#volatile的实现原则" class="headerlink" title="volatile的实现原则"></a>volatile的实现原则</h5><ul>
+<li>Lock前缀指令会引起处理器缓存写回到内存</li>
+<li>一个处理器的缓存写到内存会导致其他处理器的缓存无效</li>
+</ul>
+<h3 id="volatile的使用优化"><a href="#volatile的使用优化" class="headerlink" title="volatile的使用优化"></a>volatile的使用优化</h3><h4 id="追加字节优化性能"><a href="#追加字节优化性能" class="headerlink" title="追加字节优化性能"></a>追加字节优化性能</h4><p>因为对于Intel core i7、酷睿、Atom和NetBurst，以及Core Solo和Pentium M处理器的L1、L2、L3的高速缓存行都是64字节宽，不支持部分填充缓存行，这意味着，如果队列的头节点和尾节点都不足64字节的话、处理器会将他们读到同一个高速缓存行中，在多处理器下每个处理器都会缓存同样的头、尾节点，当一个处理器试图修改头节点的时候，会将整个缓存行锁定，导致其他处理器无法访问自己高速缓存中的尾节点，造成了<strong>伪共享问题</strong>。这严重影响了效率。</p>
+<p>但是如果我们将头、尾节点填充到64字节，处理器就不会把他们放在同一个缓存行中，这就解决了伪共享问题。</p>
+<p>但是，也<strong>不是在使用volatile变量时都应该追加到64字节</strong>，下面两种情景就不需要</p>
+<ul>
+<li>缓存行非64字节宽的处理器</li>
+<li>共享变量不会被频繁的读写</li>
+</ul>
+<p>不过在Java7中，追加字节的方式可能不生效，因为Java7更加智能，会淘汰或者重新排列无用字段，除了volatile，Java并发编程中应用比较多的是<code>synchronized</code>。</p>
+<h2 id="synchronized的实现原理与应用"><a href="#synchronized的实现原理与应用" class="headerlink" title="synchronized的实现原理与应用"></a>synchronized的实现原理与应用</h2><p><code>synchronized</code>被称为重量级锁。实际上随着Java SE对synchronized进行各种优化之后，有些情况他就没那么重了。</p>
+<h3 id="synchronized实现同步的基础"><a href="#synchronized实现同步的基础" class="headerlink" title="synchronized实现同步的基础"></a>synchronized实现同步的基础</h3><p>Java中每一个对象都可以作为锁。具体表现为以下三种形式：</p>
+<ul>
+<li>对于普通同步方法，锁是当前实例对象</li>
+<li>对于静态同步方法，锁是当前类的Class对象</li>
+<li>对于同步方法块，锁是synchronized括号里配置的对象</li>
+</ul>
+<p>当一个线程试图访问同步代码块时，他首先必须得到锁，退出或抛出异常时必须释放锁。那么，<strong>锁究竟是什么</strong>？</p>
+<p>JVM基于进入和退出Monitor对象来实现方法同步和代码块同步，但两者细节不一样，代码块同步是使用<code>monitorenter</code>和<code>monitorexit</code>指令实现的。而方法同步是使用另外一种方式实现的，这里不详细说明。</p>
+<p>monitorenter指令是在编译后插入到同步代码块的开始位置，而monitorexit是插入到方法结束处和异常处，JVM需要保证每个monitorenter必须有对应的monitorexit与之配对。<strong>任何对象都有一个monitor与之关联</strong>，当且一个monitor被持有后，他将处于锁定状态。线程执行到monitorenter指令时，将会尝试获取对象所对应的monitor的所有权，即<strong>尝试获取对象的锁</strong>。</p>
+<h3 id="Java对象头"><a href="#Java对象头" class="headerlink" title="Java对象头"></a>Java对象头</h3><p>synchronized用的锁是存在Java对象头里的。如果对象是数组类型，则虚拟机用3个字宽存储对象头，如果是非数组类型，则用2字宽存储对象头。</p>
+<p>在32位虚拟机中，1字宽等于4字节，即32bit。</p>
+<table>
+<thead>
+<tr>
+<th>长度</th>
+<th>内容</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>32/64bit</td>
+<td>Mark Word</td>
+<td>存储对象的hashCode或锁信息等</td>
+</tr>
+<tr>
+<td>32/64bit</td>
+<td>Class Metadata Address</td>
+<td>存储对象类型数据的指针</td>
+</tr>
+<tr>
+<td>32/64bit</td>
+<td>Array length</td>
+<td>数组的长度（如果当前对象是数组）</td>
+</tr>
+</tbody></table>
+<p>Java对象头里的Mark Word里默认存储对象的HashCode、分代年龄和所标记位。32位JVM的MarkWord的默认存储结构如下表</p>
+<table>
+<thead>
+<tr>
+<th>锁状态</th>
+<th>25bit</th>
+<th>4bit</th>
+<th>1bit是否是偏向锁</th>
+<th>2bit锁标志位</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>无锁状态</td>
+<td>对象的hashCode</td>
+<td>对象分代年龄</td>
+<td>0</td>
+<td>01</td>
+</tr>
+</tbody></table>
+<p>在运行期间，Mark Word存储的数据会随着锁标志位的变化而变化，其有可能变化为存储以下4种数据。</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200710120727.png" alt="MarkWord的状态变化"></p>
+<p>在64位虚拟机下，Mark Word是64bit大小的，其存储结构如下表：</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200710120929.png" alt="image-20200710120927650"></p>
+<h3 id="锁的升级"><a href="#锁的升级" class="headerlink" title="锁的升级"></a>锁的升级</h3><p>为了减少获得锁和释放锁带来的性能消耗，引入了“偏向锁”和“轻量级锁”，在JavaSE 1.6中，锁一共有4种状态，从低到高依次是无锁状态，偏向锁状态、轻量级锁状态和重量级锁状态。锁可以升级但不能降级，这是为了提高获得锁和释放锁的效率。</p>
+<h4 id="偏向锁"><a href="#偏向锁" class="headerlink" title="偏向锁"></a>偏向锁</h4><p>在大多数情况下，锁不仅不存在多线程竞争，而且总是由<strong>同一线程多次获得</strong>，为了让线程获得锁的代价更低而引入了偏向锁。当一个线程访问同步块并获取锁时，会在对象头和栈帧的锁记录里存储锁偏向的线程ID，以后该线程在进入和退出同步块时不需要进行CAS操作来加锁和解锁，只需要测试一下对象头的Mark Word里是否储存着指向当前线程的偏向锁。<strong>如果测试失败，会检测Mark Word里偏向锁的标识是否设置为1（表示当前是偏向锁）</strong>：如果没有设置，则使用CAS竞争锁；如果设置了，则尝试使用CAS将对象头的偏向锁指向当前线程。</p>
+<p>只有遇到其他线程尝试竞争偏向锁时，持有偏向锁的线程才会主动释放偏向锁。<strong>线程不会主动释放偏向锁</strong>。</p>
+<p>当有线程竞争的时候，偏向锁会升级成轻量级锁</p>
+<h5 id="偏向锁的撤销"><a href="#偏向锁的撤销" class="headerlink" title="偏向锁的撤销"></a>偏向锁的撤销</h5><p>偏向锁使用了一种等到竞争出现才释放锁的机制，所以当其他线程尝试竞争偏向锁时，持有偏向锁的线程才会释放锁。偏向锁的撤销需要等待<strong>全局安全点</strong>（在这个时间点上没有正在执行的字节码）。他会暂停并检测拥有偏向锁的线程，如果线程不处于活动状态，就将对象头设置为无锁状态。如果线程仍然活着，拥有偏向锁的栈就会被执行，遍历偏向对象的锁记录。对象头的Mark Word要么重新偏向其他线程，要么恢复到无锁或者标记对象不适合作为偏向锁，最后唤醒暂停的线程。</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200712092010.png" alt="image-20200712092001574"></p>
+<h5 id="关闭偏向锁"><a href="#关闭偏向锁" class="headerlink" title="关闭偏向锁"></a>关闭偏向锁</h5><p>偏向锁在Java6和Java7里是默认启用的，但是它在应用程序启动几秒之后才激活，如有必要可以使用JVM参数来关闭延迟：<code>-XX:BiasedLockingStartupDelay=0</code>。如果确定应用程序中所有锁通常情况处于竞争状态，可以通过JVM参数关闭偏向锁：<code>-XX:-UseBiasedLocking=false</code>，那么程序默认会进入轻量级锁状态。</p>
+<h4 id="轻量级锁"><a href="#轻量级锁" class="headerlink" title="轻量级锁"></a>轻量级锁</h4><h5 id="轻量级锁加锁"><a href="#轻量级锁加锁" class="headerlink" title="轻量级锁加锁"></a>轻量级锁加锁</h5><p>线程在执行同步代码块之前，JVM会先在当前线程中创建用于存储所记录的空间并将对象头中的Mark Word复制到锁记录中，官方称为<code>Displace Mark Word</code>。线程尝试用CAS将对象头中的Mark Word替换成指向锁记录的指针。如果成功 ，当前线程获得锁，如果失败，则表示其他线程竞争锁，当前线程便尝试自旋来获取锁。</p>
+<h5 id="轻量级锁解锁"><a href="#轻量级锁解锁" class="headerlink" title="轻量级锁解锁"></a>轻量级锁解锁</h5><p>轻量级解锁时，会使用原子的CAS操作将<code>Displaced Mark Word</code>替换成对象头，如果成功，则表示没有竞争发生。当自选超过一定次数，表示当前锁存在竞争，锁就会膨胀成重量级锁。下图描述了这一过程</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200712145229.png" alt="image-20200712145208862"></p>
+<p>因为自旋会消耗CPU，<strong>为了避免无用的自旋（比如锁的线程被阻塞住了），一旦锁升级成重量锁，就不会再恢复到轻量级锁了。</strong></p>
+<h4 id="锁的优缺点对比"><a href="#锁的优缺点对比" class="headerlink" title="锁的优缺点对比"></a>锁的优缺点对比</h4><table>
+<thead>
+<tr>
+<th>锁</th>
+<th>优点</th>
+<th>缺点</th>
+<th>使用场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>偏向锁</td>
+<td>加锁和解锁不需要额外的消耗，和执行非同步方法相比，仅存在纳秒级的差距</td>
+<td>如果线程间存在锁竞争，会带来额外的锁撤销的消耗</td>
+<td>适用于只有一个线程访问同步块情景</td>
+</tr>
+<tr>
+<td>轻量级锁</td>
+<td>竞争的线程不会阻塞，提高了程序的响应速度</td>
+<td>如果始终得不到锁竞争的线程，使用自旋会消耗CPU</td>
+<td>追求响应时间。同步块执行速度非常快</td>
+</tr>
+<tr>
+<td>重量级锁</td>
+<td>线程竞争不用自旋，不会消耗CPU</td>
+<td>线程阻塞，相应时间缓慢</td>
+<td>追求吞吐量。同步块执行速度较长</td>
+</tr>
+</tbody></table>
+<h2 id="原子操作的实现原理"><a href="#原子操作的实现原理" class="headerlink" title="原子操作的实现原理"></a>原子操作的实现原理</h2><p>原子（atomic）意为不能进行分割的最小粒子，Java中的原子操作也是“不可被中断的一个或一系列操作”。接下来简单的说一说Intel处理器和Java里是如何实现原子操作的。</p>
+<h3 id="1、术语定义"><a href="#1、术语定义" class="headerlink" title="1、术语定义"></a>1、术语定义</h3><table>
+<thead>
+<tr>
+<th>术语名称</th>
+<th>英文</th>
+<th>解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>缓存行</td>
+<td>Cache Line</td>
+<td>缓存的最小操作单位</td>
+</tr>
+<tr>
+<td>比较并交换</td>
+<td>Compare and Swap</td>
+<td>即CAS操作，通过比较操作前的值与期望的值是否一样，如果一样，就将旧值换成新值</td>
+</tr>
+<tr>
+<td>CPU流水线</td>
+<td>CPU pipeline</td>
+<td>CPU流水线的工作方式类似于工业生产的装配流水线，在CPU中由5~6个不同功能的电路单元组成一条指令处理流水线，提高CPU的运算速度</td>
+</tr>
+<tr>
+<td>内存顺序冲突</td>
+<td>Memory order violation</td>
+<td>内存顺序冲突一般是由假共享引起的，假共享是指多个CPU同时修改同一个缓存行的不同部分而引起其中一个CPU的操作无效，当出现内存顺序冲突时，CPU必须清空流水线</td>
+</tr>
+</tbody></table>
+<h3 id="原子操作的实现"><a href="#原子操作的实现" class="headerlink" title="原子操作的实现"></a>原子操作的实现</h3><p>32位IA-32处理器使用基于对缓存加锁或总线加锁的方式来实现多处理器之间的原子操作。首先处理器会自动保证基本的内存操作的原子性（从内存读取或者写入一个字节是原子的）。复杂的操作，处理器无法保证原子性，因此，处理器提供**<code>总线锁定</code><strong>和</strong><code>缓存锁定</code>**两个机制来保证复杂内存操作的原子性。</p>
+<h4 id="总线锁定保证原子性"><a href="#总线锁定保证原子性" class="headerlink" title="总线锁定保证原子性"></a>总线锁定保证原子性</h4><p>如果多个处理器同时对共享变量进行读改写操作，那么共享变量就会被多个处理器同时进行操作，这样读改写操作就不是原子的，操作完共享变量的值回合期望的不一致，如下图（两个线程同时对i进行累加）</p>
+<p><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020200712155422.png" alt="image-20200712155421044"></p>
+<p>总线索就是来解决这个问题的：</p>
+<p>所谓<strong>总线索就是使用处理器提供一个LOCK#信号</strong>，当一个处理器在总线上输出此信号时，其他处理器的对缓存了该共享变量的缓存行的请求将被阻塞住，那么该处理器可以独占共享内存。</p>
+<h4 id="使用缓存锁保证原子性"><a href="#使用缓存锁保证原子性" class="headerlink" title="使用缓存锁保证原子性"></a>使用缓存锁保证原子性</h4><p>​    在同一时刻，我们只需保证对某个内存地址的操作时原子性即可，但<strong>总线索定把CPU和内存之间的通信锁住了</strong>，这使得锁定期间，其他处理器不能操作其他内存地址的数据。总线锁定的开销时比较大的。目前处理器在某些场合下使用缓存锁定代替总线锁定来进行优化。</p>
+<p>​    频繁使用的内存会缓存在处理器的L1、L2和L3高速缓存里，那么原子操作就可以直接在处理器内存缓存中进行，并不需要声明总线锁，在Pentium6和目前的处理器中可以使用“缓存锁定”的方式来实现复杂的原子性操作。所谓<strong>“缓存锁定”是指内存区域如果被缓存在处理器的缓存行中，并且在Lock操作期间被锁定，那么当它执行锁操作回写到内存时，处理器不在总线上声言LOCK#信号，而是修改内部的内存地址，并允许它的缓存一致性机制来保证操作的原子性。</strong>这是因为缓存一致性会阻止同时修改由两个以上处理器缓存的内存区域数据，当其他处理器回写已被锁定的缓存行的数据时，会使缓存行无效。</p>
+<h4 id="不能使用缓存锁定的情况"><a href="#不能使用缓存锁定的情况" class="headerlink" title="不能使用缓存锁定的情况"></a>不能使用缓存锁定的情况</h4><ol>
+<li>当操作的数据不能被缓存在处理器内部，或操作的数据跨多个缓存行时，则处理器会调用总线锁定</li>
+<li>有些处理器不支持缓存锁定。如Intel 486和Pentium处理器，就算锁定的内存区域在处理器的缓存行中也会调用总线锁定。</li>
+</ol>
+<h3 id="Java实现原子操作"><a href="#Java实现原子操作" class="headerlink" title="Java实现原子操作"></a>Java实现原子操作</h3><p>Java可以通过锁和CAS的方式实现原子操作。</p>
+<h4 id="循环CAS实现原子操作"><a href="#循环CAS实现原子操作" class="headerlink" title="循环CAS实现原子操作"></a>循环CAS实现原子操作</h4><p>JVM中的CAS操作正是利用处理器提供的CMPXCHG指令实现的。自旋CAS实现的基本思路就是循环进行CAS操作直到成功为止。从Java1.5开始，JDK并发包里提供了一些类来支持原子操作，如：<code>AtomicBoolean</code>,<code>AtomicInteger</code>等。</p>
+<h4 id="CAS实现原子性的三大问题"><a href="#CAS实现原子性的三大问题" class="headerlink" title="CAS实现原子性的三大问题"></a>CAS实现原子性的三大问题</h4><ul>
+<li>ABA问题。使用<code>AtomicStampReference</code>类来解决。其会检查当前引用是否等于预期引用，当前标志是否等于预期标志。简单理解就是加上时间戳或者加入一个标志变量（线程修改一次就加一），让旧值无法复原。</li>
+<li>循环时间开销大。这个暂时无法解决，《Java并发编程的艺术》一书给出的建议是JVM加入处理器提供的pause指令</li>
+<li>只能保证一个共享变量的原子操作。解决方法：1）将多个共享变量合并成有一个共享变量来操作；2）使用<code>AtomicRederence</code>类来保证引用对象之间的原子性，就可以把都哦个变量放在一个对象里进行CAS操作。</li>
+</ul>
+]]></content>
+      <categories>
+        <category>java</category>
+        <category>多线程</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>传输层</title>
+    <url>/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E4%BC%A0%E8%BE%93%E5%B1%82/</url>
+    <content><![CDATA[<p><strong><font style="color: #FFC0C9">本章重点内容</font></strong></p>
+<blockquote>
+<ol>
+<li>运输层为相互通信的应用提供逻辑通信</li>
+<li>端口和套接字的意义</li>
+<li>无连接的UDP的特点</li>
+<li>面向连接的TCP的特点</li>
+<li>在不可靠的网络上实现可靠传输的工作原理，停止等待协议和ARQ协议</li>
+<li>TCP的滑动窗口、流量控制、拥塞控制和连接管理</li>
+</ol>
+</blockquote>
+<span id="more"></span>
+
+<h1 id="运输层协议概述"><a href="#运输层协议概述" class="headerlink" title="运输层协议概述"></a>运输层协议概述</h1><h2 id="进程之间的通信发送"><a href="#进程之间的通信发送" class="headerlink" title="进程之间的通信发送"></a>进程之间的通信发送</h2><p>从通信和信息处理的角度看，<strong>运输层向它上面的应用层提供通信服务</strong>，它术语面向通信部分的最高层，同时也是用户功能中的最底层。只有位于网络边缘部分的主机的协议栈才有运输层</p>
+<p><strong>两个主机进行通信实际上就是两个主机中的应用进程互相通信</strong>，又称为<code>端到端的通信</code></p>
+<p><code>运输层提供应用进程间的逻辑通信</code>，即运输层逻辑上是直接通信的，但实际上是通过下层来实现的。</p>
+<h2 id="运输层的两个主要协议"><a href="#运输层的两个主要协议" class="headerlink" title="运输层的两个主要协议"></a>运输层的两个主要协议</h2><p>TCP/IP运输层的两个主要协议都是互联网的正式标准，即：</p>
+<ol>
+<li><code>用户数据报协议UDP</code></li>
+<li><code>传输控制协议TCP</code></li>
+</ol>
+<h2 id="运输层的主要功能"><a href="#运输层的主要功能" class="headerlink" title="运输层的主要功能"></a>运输层的主要功能</h2><ul>
+<li>运输层为应用进程之间提供端到端的逻辑通信</li>
+<li>运输层还要对收到的报文进行差错检测</li>
+<li>运输层需要有两种不同的运输协议，即面向连接的TCP和无连接的UDP</li>
+</ul>
+<h2 id="运输层的端口"><a href="#运输层的端口" class="headerlink" title="运输层的端口"></a>运输层的端口</h2><p>运输层使用协议端口号，或通常简称为端口。运输层拥有<code>复用</code>和<code>分用</code>的功能。应用层所有的应用进程都可以通过运输层再传到IP层，这就是复用。运输层从IP层收到发送给各应用进程的数据后，必须分别交付指明的各应用进程，这就是分用。给应用进程一个明确的标志是至关重要的。这个标志就是端口。</p>
+<h3 id="TCP的端口"><a href="#TCP的端口" class="headerlink" title="TCP的端口"></a>TCP的端口</h3><p>端口用一个16位端口号进行标志。端口号只具有本地意义，即端口号只为了标志本计算机应用层的各进程。</p>
+<p><font style="color: #FF9966"><strong>三类端口</strong></font></p>
+<ul>
+<li><strong>熟知端口</strong>，一般为0~1023</li>
+<li><strong>登记端口号</strong>，数值为1024~49151。<strong>为没有熟知端口号的应用程式使用</strong>，使用这个范围的端口号必须在IANA登记，以免重复</li>
+<li><strong>客户端口号或短暂端口号</strong>，数值为49153~65535，留给客户进程选择暂时使用。当服务器进程收到客户进程的报文时，就知道了客户进程所使用的动态端口号，使用结束后，这个端口号可供其他客户进程以后使用。</li>
+</ul>
+<h1 id="用户数据报协议UDP"><a href="#用户数据报协议UDP" class="headerlink" title="用户数据报协议UDP"></a>用户数据报协议UDP</h1><p>UDP只在IP的数据报服务之上增加了很少一点的功能，即端口的功能和差错检测的功能</p>
+<h2 id="UDP的主要特点"><a href="#UDP的主要特点" class="headerlink" title="UDP的主要特点"></a>UDP的主要特点</h2><ul>
+<li>UDP<strong>是无连接的</strong>，即发送数据之前不需要建立连接</li>
+<li>UDP<strong>使用尽最大努力交付</strong>，即不保证可靠交付，同时也不使用拥塞控制。</li>
+<li>UDP<strong>是面向报文的</strong>。UDP没有-拥塞控制，适合多媒体通信的要求</li>
+<li><strong>UDP支持一对一、一对多、多对一和多对多的交互通信</strong></li>
+<li>UDP<strong>的首部开销小</strong>，只有8个字节</li>
+</ul>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200824150733.png" alt="image-20200824150723727"></p>
+<p>UDP的首部格式<img src="https://gitee.com/yovette/Images/raw/master/img/20200824150831.png" alt="image-20200824150829839"></p>
+<p>伪首部用来计算检验和，将伪首部UDP用户数据报一起计算。不向下传送也不向上递交。</p>
+<h1 id="传输控制协议TCP概述"><a href="#传输控制协议TCP概述" class="headerlink" title="传输控制协议TCP概述"></a>传输控制协议TCP概述</h1><h2 id="TCP主要特点"><a href="#TCP主要特点" class="headerlink" title="TCP主要特点"></a>TCP主要特点</h2><ul>
+<li>TCP是面向连接的运输层协议</li>
+<li>每一条TCP连接只能有两个端点</li>
+<li>TCP提供可靠交付的服务</li>
+<li>TCP提供全双工通信</li>
+<li>面向字节流</li>
+</ul>
+<p><strong>TCP连接是一条虚连接</strong>，而不是一条真正的物理连接。TCP报文段先要传送到IP层，加上IP首部后，在传送到数据链路层。再加上数据链路层的首部和尾部才离开主机发送到物理链路。</p>
+<p>TCP和UDP在发送报文时所采用的方式完全不同，TCP并不关心应用进程一次把多长的报文发送到TCP的缓存中，而是根据对方给出的窗口值和当前网络拥塞的程度决定一个报文段应包含多少个字节。UDP发送的报文长度是应用进程给出的。如果应用程序传送到的TCP缓存的数据块太长，TCP就可以把它划分短一些再传送。</p>
+<h2 id="套接字"><a href="#套接字" class="headerlink" title="套接字"></a>套接字</h2><p>套接字 socket = (IP地址: 端口号)  </p>
+<p>每一条TCP连接唯一地被通信两端的两个端点（即套接字）所确定。即：</p>
+<p>TCP 连接 ::= {socket1, socket2} = {(IP1: port1), (IP2: port2)}   </p>
+<h2 id="可靠通信的实现"><a href="#可靠通信的实现" class="headerlink" title="可靠通信的实现"></a>可靠通信的实现</h2><p>TCP下面的网络所提供的是不可靠的传输，因此TCP必须采用适当的措施才能使得两个运输层之间的通信变得可靠。</p>
+<p><strong><font style="color: #FFC0C9">理想的传输条件有以下两个特点</font></strong></p>
+<ol>
+<li><strong>传输信道不产生差错</strong></li>
+<li><strong>不管发送方以多快的速度发送数据，接收方总是来得及处理收到的数据。</strong></li>
+</ol>
+<p>实际的网络都不具备以上两个理想条件，但我们可以使用一些可靠传输协议，当出现差错时让发送方重传出现差错的数据，并且在来不及处理收到的数据的时候及时告诉发送方适当降低发送数据的速度。</p>
+<p>在不可靠的传输网络中，可以通过<strong>确认和重传机制实现可靠的通信</strong>。可靠的传输协议常称为<code>自动重传请求ARQ</code>。ARQ表名重传的请求是<strong>自动</strong>进行的，接收方不需要请求发送方重传某个出错的分组，即发送方在没有受到确认报文会自动重传。</p>
+<p>下面将从最简单的<code>停止等待协议</code>讲起。</p>
+<h3 id="停止等待协议"><a href="#停止等待协议" class="headerlink" title="停止等待协议"></a>停止等待协议</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201116205915.png" alt="停止等待协议"></p>
+<p>停止等待协议非常简单，发送一个数据报，发送完就暂停发送，等待B的确认。B收到了就向A发送确认。A在收到了对M1的确认报文之后，就再发送下一个分组M2。当出现差错的情况，接收端就丢弃报文，其他什么也不做(不通知发送端)。发送端一段时间后没有收到确认报文就认为刚刚的分组丢了，重新发送一份，这称为<code>超时重传</code>。</p>
+<p>除此之外，还有<code>确认丢失</code>和<code>确认迟到</code>的情况，见下图：</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201116210438.png" alt="确认丢失和确认迟到"></p>
+<h3 id="信道利用率"><a href="#信道利用率" class="headerlink" title="信道利用率"></a>信道利用率</h3><p>停止等待协议的优点是简单，但缺点是信道利用率太低</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200824154509.png" alt="image-20200824154501811"></p>
+<h3 id="连续ARQ协议"><a href="#连续ARQ协议" class="headerlink" title="连续ARQ协议"></a>连续ARQ协议</h3><p>连续ARQ协议是TCP协议精髓——滑动窗口协议的最基本的概念，见下图</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200824154634.png" alt="image-20200824154633510"></p>
+<p>连续ARQ协议会发送连续的n个窗口。<strong>接收方对按序到达的最后一个报文进行确认</strong>，表示这个分组之前的所有报文都正确送达，发送方收到确认报文之后就把发送窗口向前滑动。</p>
+<p>累计确认有优点也有缺点，优点是容易实现，即时确认丢失也不必重传。但缺点是不能像发送方反映出正确收到的所有分组信息，例如发送了前五个分组，第三个分组丢了，正确收到的第4、5个分组因为发送方不知道是否正确收到而要一起重传。</p>
+<h2 id="TCP可靠通信的工作原理"><a href="#TCP可靠通信的工作原理" class="headerlink" title="TCP可靠通信的工作原理"></a>TCP可靠通信的工作原理</h2><ul>
+<li>TCP连接的每一端都必须设有两个窗口——一个发送窗口和一个接收窗口</li>
+<li>TCP的可靠传输机制用字节的序号进行控制，<strong>TCP所有的确认都是基于序号而不是基于报文段</strong>。</li>
+<li>TCP两端的<strong>四个窗口经常处于动态变化之中</strong></li>
+<li>TCP连接的往返时间RTT也不是固定不变的，需要使用特定的算法估算较为合理的重传时间。</li>
+</ul>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200824160015.png" alt="image-20200824160014738"></p>
+<p>这里重点说明一下六个标志位：</p>
+<ul>
+<li><code>紧急URG</code>。当URG=1时，表明紧急指针字段有效。它告诉系统此报文段中有紧急数据，应尽快传送，而不要按原来的排队顺序来传送。例如用户的中断指令。</li>
+<li><code>确认ACK</code>。当ACK=1时有效，在连接建立后所有传送的报文都必须将ACK置1。</li>
+<li><code>推送PSH</code>。当两个应用进程进行交互式的通信时，有时在一端的应用进程希望在键入一个命令后立刻就能收到对方的响应，在这种情况下，TCP就可以使用推送操作，表示希望尽快地交付，而不再等到整个缓存都填满了再向上交付。</li>
+<li><code>复位RST</code>。当RST=1时，表明TCP连接中出现严重差错，必须释放连接，然后再重新建立运输链接</li>
+<li><code>同步SYN</code>。在建立连接时用来的同步序号</li>
+<li><code>终止FIN</code>。用来释放一个连接</li>
+</ul>
+<p><code>窗口</code>是指发送本报文段的一方的接收窗口。窗口值告诉对方：从本报文段首部中的确认号算起，接收方目前允许对方发送的数据量，<strong>窗口值作为接收方让发送方设置其发送窗口的依据</strong>。</p>
+<h2 id="TCP可靠传输的实现"><a href="#TCP可靠传输的实现" class="headerlink" title="TCP可靠传输的实现"></a>TCP可靠传输的实现</h2><h3 id="以字节为单位的滑动窗口"><a href="#以字节为单位的滑动窗口" class="headerlink" title="以字节为单位的滑动窗口"></a>以字节为单位的滑动窗口</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201116215234.png" alt="以字节为单位的滑动窗口"></p>
+<p>先讨论发送方A的发送窗口，发送窗口表示：在没有收到B的确认的情况下，A可以连续把窗口内的数据都发送出去，凡是已经发送过的数据，在未收到确认之前都必须暂时保留，以便在超时重传时使用。</p>
+<p>当发送窗口没有收到确认报文的时候，滑动窗口不会向前滑动，<strong>A在一段时候后(由超时计时器控制)就重传这部分数据，直到收到确认为止</strong>。</p>
+<p><strong><font style="color: #FFC0C9">需要明确的两点</font></strong></p>
+<ol>
+<li>缓存空间和序号空间都是有限的，并且都是循环使用的，最好是把它们画成圆环状的。</li>
+<li>实际上缓存或窗口中的字节数是非常之大的</li>
+</ol>
+<p><strong><font style="color: #FFC0C9">发送缓存暂时存放</font></strong></p>
+<ol>
+<li>应用程序准备发送的数据</li>
+<li>TCP已发出但尚未收到确认的数据</li>
+</ol>
+<p><strong><font style="color: #FFC0C9">接收缓存暂时存放</font></strong></p>
+<ol>
+<li>按序到达、但尚未被接收应用程序读取的数据</li>
+<li>未按序到达的数据</li>
+</ol>
+<p>**<font style="color: #FFC0C9">需要注意的三点</font>**：</p>
+<ol>
+<li>虽然A的发送窗口根据B的接收窗口设置的，<strong>但是同一时刻A的发送窗口并不一定和B的接收窗口一样大</strong>。因为网络的滞后性，并且发送方A也会根据网络当时的拥塞情况适当减小自己的发送窗口数值。</li>
+<li>对不按序到达的数据该如何处理，TCP标准并无明确规定，<strong>TCP通常对不按序到达的数据是先临时存放在接收窗口中，等到字节流中所缺少的字节收到后再按序交付上层的应用进程</strong></li>
+<li>TCP要求接收方必须有累计确认的功能，用以减少传输开销<strong>。接收方可以在合适的时候发送确认，也可以在自己有数据要发送时把确认信息顺便捎带上</strong>。不过要求接收方不应过分推迟发送确认，TCP标准规定确认推迟的时间不应超过0.5s。</li>
+</ol>
+<h3 id="超时重传的选择"><a href="#超时重传的选择" class="headerlink" title="超时重传的选择"></a>超时重传的选择</h3><p>超时计时器的超时重传时间究竟应设置为多大呢？</p>
+<p>TCP采用了一种自适应算法，它记录一个报文段发出的时间，以及收到相应确认报文的时间。这两个时间之差就是<code>报文段的往返时间RTT</code>。TCP保留了RTT的一个加权平均往返时间RTT<del>s</del>。之后每测量到一个新的RTT样本就按下式重新计算一次RTT<del>s</del>：<br>$$<br>新的RTT_s = (1- \alpha) \times (旧的RTT_s) + \alpha \times (新的RTT样本)<br>$$</p>
+<p>当$\alpha$接近0的时候表示新的RTT<del>s</del>和旧的RTT<del>s</del>相比变化不大(变化更慢)，反之收新的RTT影响大</p>
+<p>超时重传时间RTO应略大于上面的加权平均往返时间RTT<del>s</del>。<br>$$<br>RTO = RTT_s + 4 \times RTT_D<br>$$</p>
+<p>$RTT_D$是RTT的偏差的加权平均值，它与$RTT_S$和新的RTT样本之差有关。<br>$$<br>新的RTT_D = (1 - \beta) \times (旧的RTT_D) + \beta \times | RTT_S - 新的RTT样本 |<br>$$<br>这里的$\beta$是一个小于1的系数，推荐值是0.25.</p>
+<p>这里还有一个问题——当报文重传的时候，如何确定当前确认报文是对先一个的报文的确认，还是对重传的报文的确认？这对计算RTO影响非常大。</p>
+<p>现在常用的算法是：报文段每重传一次，不再使用上面的公式，而是把超时重传时间增大一些，典型的做法是增大两倍。</p>
+<h3 id="TCP的流量控制"><a href="#TCP的流量控制" class="headerlink" title="TCP的流量控制"></a>TCP的流量控制</h3><p>所谓流量控制就是<strong>让发送方的发送速率不要太快，要让对方来得及接收</strong>。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201118200018.png" alt="利用可变窗口进行流量控制"></p>
+<p>设A向B发送数据。在连接建立时，B告诉A：“我的接收窗口rwnd=400”(这里rwnd表示receiver window)。因此发送方的发送窗口不能超过接收方给出的接收窗口。TCP窗口的窗口单位是字节而不是报文段。</p>
+<p>为了解决确认报文丢失导致死锁的僵局，TCP设置了一个<code>持续计时器</code>的机制。只要TCP连接的一方收到对方的零窗口通知，就启动持续计时器。若持续计时器设置的时间到了，就询问对方现在的窗口是否依旧是0窗口。</p>
+<h3 id="TCP的拥塞控制"><a href="#TCP的拥塞控制" class="headerlink" title="TCP的拥塞控制"></a>TCP的拥塞控制</h3><p>所谓拥塞控制就是<strong>防止过多的数据注入到网络中，这样可以使网络中的路由器或链路不致过载</strong>。拥塞控制所要做的都有一个前提，就是网络能够承受现有的网络负荷。<strong>拥塞控制是一个全局性的过程</strong>。</p>
+<p>相反流量控制往往是指点对点通行量的控制，是个端到端的问题。</p>
+<p>由于计算机网络是一个很复杂的系统，因此可以从控制理论的角度来看拥塞控制这个问题。从大的方向看，可以分为<code>开环控制</code>和<code>闭环控制</code>两种方法。开环控制就是在设计的时候在设计网络时事先将有关发生拥塞的因素考虑周到，力求网络在工作时不产生拥塞。</p>
+<p>闭环控制是基于反馈环路的概念，主要有以下几种措施：</p>
+<ol>
+<li>检测网络系统以便检测到拥塞在何时、何处发生</li>
+<li>把拥塞发生的信息传送到可采取行动的地方</li>
+<li>调整网络系统的运行以解决出现的问题</li>
+</ol>
+<blockquote>
+<p>**<font style="color: #FFC0C9">检测网络的一些指标</font>**：</p>
+<ol>
+<li>缺少缓存空间而被丢弃的分组的百分数</li>
+<li>平均队列长度</li>
+<li>超时重传的分组数</li>
+<li>平均分组时延</li>
+<li>分组时延的标准差</li>
+</ol>
+</blockquote>
+<h3 id="TCP的拥塞控制方法"><a href="#TCP的拥塞控制方法" class="headerlink" title="TCP的拥塞控制方法"></a>TCP的拥塞控制方法</h3><p>TCP进行拥塞控制的算法有四种：<code>慢开始</code>、<code>拥塞避免</code>、<code>快重传</code>、<code>快恢复</code></p>
+<p>现在的拥塞控制方法是<code>基于窗口</code>。发送方维持一个叫做<code>拥塞窗口cwnd</code>的状态变量。拥塞窗口的大小取决于网络的拥塞程序，发送方让自己的发送窗口等于拥塞窗口。</p>
+<h4 id="慢开始"><a href="#慢开始" class="headerlink" title="慢开始"></a>慢开始</h4><p>在开始传输数据时，先探测以下，然后从小到大逐渐增大发送窗口。也就是由小到大逐渐增大拥塞窗口数值</p>
+<h4 id="拥塞避免"><a href="#拥塞避免" class="headerlink" title="拥塞避免"></a>拥塞避免</h4><p>慢开始的cwnd到后面增长会非常迅速，所以设置一个慢开始门限<code>ssthresh</code>，当超过了门限之后就采用拥塞避免算法。</p>
+<p>拥塞避免算法是<strong>让拥塞窗口cwnd缓慢增大，每经过一个往返时间RTT就把发送方的拥塞窗口cwnd加1，而不是成倍增长</strong>。</p>
+<h4 id="快重传"><a href="#快重传" class="headerlink" title="快重传"></a>快重传</h4><p>当个别报文段丢失，但网络并未阻塞，如果发送方误认为阻塞而启动慢开始，就降低了传输效率</p>
+<p>快重传算法首先要求接收方不要等待自己发送数据时才进行捎带确认，而是立即发送确认，即收到了失序的报文段要立即发出对已收到的报文段的重复确认。<strong>如果收到了3个连续的重复确认报文，说明重复报文下一个报文已丢失，故接收方要立即重传丢失的报文</strong>。这样也不会出现超时而误认为出现网络拥塞。</p>
+<h4 id="快恢复"><a href="#快恢复" class="headerlink" title="快恢复"></a>快恢复</h4><p>快恢复是指当发送方直到只是丢失了个别的报文段，于是不启动慢开始，而是调整门限值为<code>ssthresh=cwnd/2</code>，然后开始拥塞避免算法。</p>
+<h3 id="主动队列管理AQM"><a href="#主动队列管理AQM" class="headerlink" title="主动队列管理AQM"></a>主动队列管理AQM</h3><p>主动队列管理是指不要等待路由器的队列长度以及达到最大值而不得不丢弃后面到达的分组，而是当使用队列，当队列长度达到一定值时发出预警。</p>
+<blockquote>
+<p>实现：当队列长度达到一定时，对到达的分组按照一定的丢弃概率p丢弃，后面的发送方会根据已丢失的报文降低cwnd。即根据早期征兆实现负反馈</p>
+</blockquote>
+<h2 id="TCP的运输连接管理"><a href="#TCP的运输连接管理" class="headerlink" title="TCP的运输连接管理"></a>TCP的运输连接管理</h2><p>运输连接有三个阶段，即：连接建立、数据传送和连接释放。</p>
+<p>在TCP连接建立过程中要解决以下三个问题：</p>
+<ol>
+<li>使每一方能够确知对方的存在</li>
+<li>要允许对方协商一些参数(如最大窗口值、能否使用窗口扩大选项和时间戳选项以及服务质量等)</li>
+<li>能够对运输实体资源(如缓存大小、连接表中的项目等)进行分配</li>
+</ol>
+<h3 id="TCP连接的建立"><a href="#TCP连接的建立" class="headerlink" title="TCP连接的建立"></a>TCP连接的建立</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201118205809.png" alt="image-20201118205808255"></p>
+<p>假定主机A运行的是TCP客户程序，而B运行的是TCP服务器程序。一开始都处于<code>CLOSED(关闭状态)</code>。</p>
+<p><strong><font style="color: #FFC0C9">准备阶段</font></strong></p>
+<p>B的TCP服务器进程先创建传输控制块TCB。准备接受客户进程的连接请求。然后服务器进程就处于<code>LISTEN(收听状态)</code>。</p>
+<p><strong><font style="color: #FFC0C9">第一次握手:</font></strong></p>
+<p>A的TCP客户进程也是创建传输控制模块TCB。然后建立TCP连接时，向B发出连接请求报文段，这时首部中的同步位<code>SYN=1</code>，同时选择一个初始序号<code>seq=x</code>。TCP规定，<strong>SYN报文段不能携带数据，但要消耗掉一个序号</strong>(因为需要收到服务端ack=x+1的确认报文)。这时TCP客户进程进入<code>SYS-SENT(同步已发送)</code>状态。</p>
+<p><strong><font style="color: #FFC0C9">第二次握手</font></strong></p>
+<p>B收到连接请求报文之后，如同意建立连接，则向A发送确认，在确认报文段中应把SYN和ACK位都置1，确认号是<code>ack=x+1</code>，同时也为自己选择一个初始序号seq=y。同样这个报文段也不能携带数据，但同样要消耗掉一个序号。这时TCP服务器进程进入<code>SYN-RCVD(同步收到)</code>状态。</p>
+<p><strong><font style="color: #FFc0c9">第三次握手</font></strong></p>
+<p>TCP客户进程收到B的确认之后，还要向B发出确认。确认报文段的ACK置1，确认号ack=y+1。而自己的序号seq=x+1。TCP规定，这个报文段可以携带数据，但如果不携带数据则不消耗序号(不需要对应的确认号)。这时，TCP连接以及建立，A进入<code>ESTABLISHED(已建立连接)</code>状态</p>
+<p>当B收到A的确认之后，也进入<code>ESTABLESHED</code>状态</p>
+<blockquote>
+<p>消不消耗序号是根据是否需要对应的TCP确认报文来的。TCP的确认是依据不重复的序号。</p>
+</blockquote>
+<h3 id="为什么TCP要进行第三次握手？"><a href="#为什么TCP要进行第三次握手？" class="headerlink" title="为什么TCP要进行第三次握手？"></a>为什么TCP要进行第三次握手？</h3><p><strong>主要是为了防止已失效的连接请求报文段突然又传送到了B发生错误</strong>。</p>
+<p><strong><font style="color:#FFc0c9"> 考虑下面情况：</font></strong></p>
+<p>当A传了一次连接请求，出现网络拥塞、报文丢失等情况而长时间留滞。一段时间之后重新到达了B，倘若A不发送确认报文，就会出现B单方面认为已经建立连接，并一直等待A发来数据。这样B的许多资源就被浪费了。</p>
+<p>采用三报文握手就可以防止上述现象的发生。</p>
+<h3 id="TCP的连接释放"><a href="#TCP的连接释放" class="headerlink" title="TCP的连接释放"></a>TCP的连接释放</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201118213354.png" alt="image-20201118213351155"></p>
+<p>数据传输结束后，通信的双方都可释放连接。现在A和B都处于<code>ESTABLISHED</code>状态。</p>
+<p><strong><font style="color:#FFc0c9">第一次挥手</font></strong></p>
+<p>A应用进程先向其TCP发出连接释放报文段，并停止在发送数据，主动关闭TCP连接。A把连接释放报文段首部的终止控制位FIN置1，其序号seq=u，它等于前面已传送过的数据的最后一个字节加1。这时A进入<code>FIN-WAIT-1</code>状态，等待B的确认。FIN报文段即时不携带数据也消耗一个序号。</p>
+<p><strong><font style="color:#FFc0c9">第二次挥手</font></strong></p>
+<p>B收到连接释放报文段后即发出确认，确认号是<code>ack=u+1</code>，而这个报文段自己的序号是v，等于B前面传送的数据的最后一个字节的序号+1。然后B就进入<code>CLOSE-WAIT(关闭等待状态)</code>。TCP服务器进程这时应通知高层应用进程，因而从A到B这个方向的连接就释放了。这时TCP的连接处于半关闭状态，即<strong>A已经没有数据要发送了，但B若发送数据，A仍要接收</strong>。</p>
+<p>A接收到B的确认之后，就进入<code>FIN-WAIT-2</code>状态，等待B发出的连接释放报文段</p>
+<p><strong><font style="color:#FFc0c9">第三次回收</font></strong></p>
+<p>若B没有要向A发送的数据，其应用进程就通知TCP释放连接。这时B发出的连接释放报文使FIN=1。假定B的序号位w。**B必须重复上次已发送过的确认号<code>ack=u+1**</code>。这时B就进入<code>LAST-ACK(最后确认)</code>状态，等待A的确认。</p>
+<p><strong><font style="color:#FFc0c9">第四次回收</font></strong></p>
+<p>A在收到B的连接释放报文段之后，必须对此发出确认，在确认报文段中把ACK置1，确认号w+1，而自己的序号是<code>seq=u+1</code>。然后进入到<code>TIME-WAIT(时间等待)</code>状态。现在TCP连接还没有释放掉，<strong>必须经过<code>时间等待计时器</code>设置的时间2MSL后，A才进入到CLOSED状态</strong>。<code>时间MSL叫做最长报文段寿命</code>。一般建议为两分钟。</p>
+<p>B只要接收A发出的确认就进入<code>CLOSED</code>状态。</p>
+<h3 id="时间等待计时器的原因"><a href="#时间等待计时器的原因" class="headerlink" title="时间等待计时器的原因"></a>时间等待计时器的原因</h3><ol>
+<li>为了保证A发送的最后一个ACK能够到达B，防止报文段丢失</li>
+<li>防止出现上文<code>已失效的连接请求报文段</code>出现在本报文中，2MSL可以让本连接持续时间内所产生的所有报文狗从网络中消失。这样就可以使下一个新的连接中不会出现这种旧的连接请求报文段。</li>
+</ol>
+<p>除此之外，TCP还有一个<code>保活计时器</code>来处理客户端突然断开连接的特殊情况。例如，两小时后没有收到客户的数据就每隔75秒发送一次检测报文，连续10次没有响应就判断客户端故障。</p>
+<h3 id="TCP的有限状态机"><a href="#TCP的有限状态机" class="headerlink" title="TCP的有限状态机"></a>TCP的有限状态机</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201118221107.png" alt="有限状态机"></p>
+<h2 id="为什么三次握手四次挥手？"><a href="#为什么三次握手四次挥手？" class="headerlink" title="为什么三次握手四次挥手？"></a>为什么三次握手四次挥手？</h2><h2 id="TCP与UDP的比较"><a href="#TCP与UDP的比较" class="headerlink" title="TCP与UDP的比较"></a>TCP与UDP的比较</h2><h3 id="从各自的特点来看"><a href="#从各自的特点来看" class="headerlink" title="从各自的特点来看"></a>从各自的特点来看</h3><ul>
+<li><strong>TCP是面向连接的，而UDP是无连接的</strong>；<br>TCP发送数据前先要建立连接，而UDP发送数据前不需要建立连接。</li>
+<li><strong>TCP保证可靠性，UDP不保证可靠性</strong>；<br>TCP具有很多的可靠性保证机制（TCP的连接管理、超时重传、序号和确认序号、流量控制和拥塞控制都能保证TCP数据包能够无差错、不丢失、按序到达），但是UDP没有这些可靠性保证机制，因此UDP就无法保证可靠性。</li>
+<li><strong>TCP面向字节流，UDP面向数据报</strong>；<br>TCP接收和发送数据就像流水一样，可以一次接收多个，或者一次接收少半部分但是可以接收多次；但是UDP发送多少就要接收多少，如果接收的数据少于发送的数据，那么少的那部分数据永远也接收不到了。</li>
+<li><strong>每一条TCP连接只能用于点点之间一对一进行</strong>，而UDP支持一对一、一对多、多对多的交互通信；</li>
+<li><strong>TCP不仅有接收缓冲区还有发送缓冲区，而UDP只有接收缓冲区</strong>。</li>
+<li>T<strong>CP速度比较慢，因为要创建连接，保证可靠性和有序性</strong>等。<strong>UDP更加适合速度比较敏感的应用</strong>，比如在线视频媒体，电视广播，多人在线游戏等。</li>
+<li>TCP重量级，UDP轻量级；体现在元数据头大小是，TCP20字节，UDP80字节</li>
+</ul>
+<p><strong>综上</strong>：TCP适合金融等大多数领域，UDP适合游戏和娱乐场景</p>
+<h3 id="从编程来看"><a href="#从编程来看" class="headerlink" title="从编程来看"></a>从编程来看</h3><ol>
+<li>采用UDP编程比采用TCP编程要简单很多；</li>
+<li>对于服务器来说:<ul>
+<li>调用socket创建一个套接字；    </li>
+<li>调用bind函数，绑定端口号和IP地址到socket上；当这两步做完之后UDP就可以与客户端进行数据传输，但是TCP还需要调用listen使得创建的套接字变为被动套接字可以一直监听客户端的到来，接下来调用accept一直阻塞等待客户端的连接，当有客户端连接之后此时accept返回一个新的文件描述符，这个文件描述符用来和客户端进行数据交互，此时客户端与服务器就可以进行数据交互。</li>
+<li>因此对于服务器来说，TCP服务器需要调用如下接口：socket、bind、listen、accept、close（关闭文件描述符）；对于UDP来说，只用进行socket、bind、close。</li>
+</ul>
+</li>
+<li>对于客户端来说:<ul>
+<li>调用socket函数创建套接字；</li>
+<li>此时UDP的客户端就可以向服务器发送数据，但是TCP的客户端还需要调用connect 函数与TCP服务器建立连接，当连接建立成功之后，TCP客户端就可以向TCP服务器发送数据。</li>
+<li>因此对于客户端来说，TCP客户端需要调用如下接口：socket、connect、close（关闭文件描述符）；对于UDP来说，只用进行socket、close。</li>
+<li>注意： UDP是可以调用connect函数的，但是UDP的connect函数和TCP的connect函数调用确是大相径庭的，这里没有三次握手过程。内核只是检查是否存在立即可知的错误(比如目的地址不可达)，记录对端的IP和端口号，然后立即返回调用进程。</li>
+</ul>
+</li>
+<li>TCP套接字可以采用write/read、recvfrom/sendto来进行数据的的读写，但是UDP套接字不能采用write/read，因为read和write是面向字节流的。</li>
+</ol>
+<h2 id="为什么TCP采用随机序列号"><a href="#为什么TCP采用随机序列号" class="headerlink" title="为什么TCP采用随机序列号"></a>为什么TCP采用随机序列号</h2><ol>
+<li>用于控制每次发送的数据包是否接受，当发送端发送数据包时，数据包中会包含一个序列号，接收端接收到时，会返回发送端序列号，用来通知接收数据接受完毕</li>
+<li>防止接受网络上沾滞的TCP包，如果都从0开始，极容易接收之前断开连接发送的沾滞包，虽然每次TCP都会使用一个UUID作为标记，但是每次都携带UUID比较浪费流量，所以就采用随机序列号的方法</li>
+<li>防止Hack猜测序列号，然后伪装TCP报文</li>
+</ol>
+]]></content>
+      <categories>
+        <category>计算机网络</category>
+      </categories>
+      <tags>
+        <tag>计算机网络</tag>
       </tags>
   </entry>
 </search>

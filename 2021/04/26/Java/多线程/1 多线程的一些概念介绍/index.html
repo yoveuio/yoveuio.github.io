@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><meta><title>Java多线程(0) Java多线程的概念介绍 - Yoveuio Blog</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Yoveuio Blog"><meta name="msapplication-TileImage" content="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153615.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Yoveuio Blog"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="本文介绍并发编程的一些概念"><meta property="og:type" content="blog"><meta property="og:title" content="Yoveuio"><meta property="og:url" content="https://yoveuio.github.io/"><meta property="og:site_name" content="Yoveuio"><meta property="og:description" content="本文介绍并发编程的一些概念"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://cdn.jsdelivr.net/gh/removeif/removeif-demo@latest/img/avatar.png"><meta property="article:published_time" content="2021-04-26T12:57:42.707Z"><meta property="article:modified_time" content="2021-04-26T13:29:17.865Z"><meta property="article:author" content="Yoveuio"><meta property="article:tag" content="多线程"><meta property="twitter:card" content="summary"><meta property="twitter:image" content="https://cdn.jsdelivr.net/gh/removeif/removeif-demo@latest/img/avatar.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://yoveuio.github.io/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/1%20%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%9A%84%E4%B8%80%E4%BA%9B%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D/"},"headline":"Yoveuio Blog","image":["https://yoveuio.github.io/img/og_image.png"],"datePublished":"2021-04-26T12:57:42.707Z","dateModified":"2021-04-26T13:29:17.865Z","author":{"@type":"Person","name":"yoveuio"},"description":"本文介绍并发编程的一些概念"}</script><link rel="canonical" href="https://yoveuio.github.io/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/1%20%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%9A%84%E4%B8%80%E4%BA%9B%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D/"><link rel="icon" href="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153615.png"><meta name="referrer" content="no-referrer-when-downgrade"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/font-awesome/5.12.0/css/all.min.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/highlight.js/9.12.0/styles/atom-one-light.min.css"><link rel="stylesheet" href="https://fonts.loli.net/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro"><link rel="stylesheet" href="/css/default.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/font-awesome/5.12.0/css/all.min.css"><link rel="stylesheet" href="https://fonts.loli.net/css?family=Ubuntu:400,600|Source+Code+Pro|Monda:300,300italic,400,400italic,700,700italic|Roboto Slab:300,300italic,400,400italic,700,700italic|Microsoft YaHei:300,300italic,400,400italic,700,700italic|PT Mono:300,300italic,400,400italic,700,700italic&amp;amp;subset=latin,latin-ext|Inconsolata|Itim|Lobster.css"><script src="https://cdnjs.loli.net/ajax/libs/jquery/3.3.1/jquery.min.js"></script><script src="/js/globalUtils.js"></script><style>body>.footer,body>.navbar,body>.section{opacity:0}</style><!--!--><!--!--><script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" defer></script><!--!--><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/lightgallery/1.6.8/css/lightgallery.min.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/justifiedGallery/3.7.0/css/justifiedGallery.min.css"><!--!--><!--!--><script src="https://cdnjs.loli.net/ajax/libs/pace/1.0.2/pace.min.js"></script><meta name="generator" content="Hexo 5.4.0"></head><body class="is-3-column has-navbar-fixed-top"><nav class="navbar navbar-main is-fixed-top"><div class="container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153630.gif" alt="Yoveuio Blog" height="28"></a></div><div class="navbar-menu"><div class="navbar-start"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="Download on GitHub" href="https://github.com/removeif/hexo-theme-amazing"><i class="fab fa-github"></i></a><a class="navbar-item is-hidden-tablet catalogue" title="目录" href="javascript:;"><i class="fas fa-list-ul"></i></a><a class="navbar-item search" title="搜索" href="javascript:;"><i class="fas fa-search"></i></a><a class="navbar-item" id="night-nav" title="Night Mode" href="javascript:;"><i class="fas fa-moon" id="night-icon"></i></a></div></div></div></nav><script type="text/javascript" src="/js/theme-setting.js"></script><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><!--!--><div class="card"><article class="card-content article" role="article"><div class="article-meta size-small is-uppercase level is-mobile"><div class="level-left"><i class="far fa-calendar-plus"> </i>2021-04-26  <a class="commentCountImg" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/1%20%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%9A%84%E4%B8%80%E4%BA%9B%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D/#comment-container"><span class="display-none-class">/2021/04/26/Java/多线程/1 多线程的一些概念介绍/</span><i class="far fa-comment-dots"></i> <span class="commentCount" id="550354d863825dba9a7b8693b8f021fc">99+</span>  </a><span class="level-item"><i class="far fa-clock"> </i>13 分钟  <i class="fas fa-pencil-alt"> </i>1.9 k</span><span class="level-item" id="busuanzi_container_page_pv"><span id="busuanzi_value_page_pv">0</span>次访问</span></div></div><h1 class="title is-3 is-size-4-mobile">Java多线程(0) Java多线程的概念介绍</h1><div class="content"><p>本文介绍并发编程的一些概念</p>
+<span id="more"></span>
+
+<h2 id="并发编程的挑战"><a href="#并发编程的挑战" class="headerlink" title="并发编程的挑战"></a>并发编程的挑战</h2><p>并发编程是为了让程序运行得更快。但是并不是启动更多的线程就能让程序最大限度地并发执行。在编程程序的时候，我们会面临很多的挑战：上下文切换、线程死锁、以及硬件和软件的资源限制等问题，极大地影响我们的效率。</p>
+<h3 id="上下文切换"><a href="#上下文切换" class="headerlink" title="上下文切换"></a>上下文切换</h3><h4 id="概念说明"><a href="#概念说明" class="headerlink" title="概念说明"></a>概念说明</h4><p>即使是单核处理器也能支持多线程。这是因为CPU能够为每个线程分配<strong>CPU时间片</strong>来实现这个机制。时间片是CPU分配给各个线程的时间。这些时间片都非常地短，只能通过CPU不停地切换线程执行。</p>
+<p>CPU通过时间片分配算法来循环执行任务，当前任务执行一个时间片之后会切换到下一个任务。但是在切换前会保存上一个任务的状态，以便下次切换回这个任务时，可以加载这个任务的状态。</p>
+<p>任务从保存到再加载的过程就是一次上下文切</p>
+<p>换。</p>
+<p>上下文切换是需要消耗CPU资源的，过多的上下文切换反而会使得我们的程序运行速度下降。减少上下文切换成为必要</p>
+<h4 id="如何减少上下文切换"><a href="#如何减少上下文切换" class="headerlink" title="如何减少上下文切换"></a>如何减少上下文切换</h4><p>减少上下文切换的方法有如下几种 ：</p>
+<ul>
+<li><p><strong>无锁并发编程</strong>：多线程竞争锁时，会引起上下文切换，所以多线程处理数据时，可以用一些方法来避免使用锁，如将数据的ID按照Hash算法取模分段，不同的线程处理不同段的数据</p>
+</li>
+<li><p><strong>CAS算法</strong>：Java中的Atomic包使用CAS算法来更新数据，而不需要加锁</p>
+</li>
+<li><p><strong>使用最少的线程：</strong>避免创建不必要的线程</p>
+</li>
+<li><p><strong>协程</strong>：在单线程里实现多任务的调度，并在单线程里维持多个任务间的切换</p>
+</li>
+</ul>
+<h3 id="死锁"><a href="#死锁" class="headerlink" title="死锁"></a>死锁</h3><h4 id="什么是死锁"><a href="#什么是死锁" class="headerlink" title="什么是死锁"></a>什么是死锁</h4><p>锁是十分有用的工具，但是如果使用不慎，就会出现性能下降，甚至死锁。一般在一个线程拿到锁之后，陷入某种异常当中(如死循环)，没有将锁释放掉。另外一个线程去获取这个锁，必然就会在等待队列里。最后导致整个程序不可用。</p>
+<p>一旦出现死锁，业务是可以感知的。因为服务不能用了，那么只能通过查看dump线程得知到底是哪个线程出了问题。</p>
+<h4 id="避免死锁的常见方法"><a href="#避免死锁的常见方法" class="headerlink" title="避免死锁的常见方法"></a>避免死锁的常见方法</h4><ul>
+<li>避免一个线程同时获取多个锁</li>
+<li>避免一个线程在锁内同时占用多个资源，尽量保证每个锁只占用一个资源</li>
+<li>尝试使用定时锁，使用<code>lock.tryLock(timeout)</code>来替代使用内部锁机制</li>
+<li>对于数据库锁，加锁和解锁必须在一个数据库连接里，否则会出现解锁失败的情况</li>
+</ul>
+<h3 id="资源限制的挑战"><a href="#资源限制的挑战" class="headerlink" title="资源限制的挑战"></a>资源限制的挑战</h3><h4 id="什么是资源限制的挑战"><a href="#什么是资源限制的挑战" class="headerlink" title="什么是资源限制的挑战"></a>什么是资源限制的挑战</h4><p>资源限制是指在并发编程时，程序执行速度受限于计算机硬件资源或软件资源。例如服务器带宽只有2Mb/s，某个资源的下载速度是1Mb/s，系统启动10个线程下载资源，下载速度也无法突破2Mb/s。在并发编程时，需要考虑这些资源的限制。常见的硬件限制有：带宽的上传/下载速度，硬盘读写速度和CPU处理速度。软件资源限制有：数据库连接数、socket连接数等。</p>
+<h4 id="引发的问题"><a href="#引发的问题" class="headerlink" title="引发的问题"></a>引发的问题</h4><p>如果一些串行代码变为并发执行，因为资源限制导致实际上任然时串行执行。这个时候程序不仅不会加快执行，反而因为上下文切换和资源调度而变得更慢。</p>
+<h4 id="如何解决资源限制的问题"><a href="#如何解决资源限制的问题" class="headerlink" title="如何解决资源限制的问题"></a>如何解决资源限制的问题</h4><p>考虑使用集群并行执行程序。单机的资源有限制，就让程序在多机上运行。比如ODPS、Hadoop或者机子搭建服务器集群，不同的机器处理不同的数据。可以通过“数据ID%机器数”，计算一个机器编号，让对应机器处理这个数据。</p>
+<p>对于软件资源限制，可以考虑资源池复用。比如使用连接池将数据库和Socket连接进行复用，或者在调用对方webservice接口获取数据时，只建立一个连接。</p>
+<h4 id="在资源限制情况下进行并发编程"><a href="#在资源限制情况下进行并发编程" class="headerlink" title="在资源限制情况下进行并发编程"></a>在资源限制情况下进行并发编程</h4><p>我们可以根据不同的资源限制调整程序的并发度。</p>
+<h2 id="进程与线程之间的区别"><a href="#进程与线程之间的区别" class="headerlink" title="进程与线程之间的区别"></a>进程与线程之间的区别</h2><ol>
+<li>进程是对运行时程序的封装，是系统进行资源调度和分配的基本单位，实现了操作系统的并发</li>
+<li>线程是进程的子任务，是CPU调度和分派的基本单位，用于保证程序的实时性，实现进程内部的并发</li>
+<li>进程切换涉及到资源的切换，也就意味着牵扯到虚拟内存，也就是页表的切换。而且进程的上下文明显大于线程</li>
+</ol>
+<h3 id="进程之间通信的几种方式"><a href="#进程之间通信的几种方式" class="headerlink" title="进程之间通信的几种方式"></a>进程之间通信的几种方式</h3><ol>
+<li>管道及命名管道：管道可用于由亲缘关系的父子进程间的通信</li>
+<li>信号：信号是一种比较复杂的通信方式，用于通知接收进程某个事件已经发生</li>
+<li>消息队列：用于解决上面的信号量有限的缺点</li>
+<li>共享内存：开辟一块公共空间</li>
+<li>信号量：主要作为进程之间及同一种进程的不同进程之间的同步和互斥手段</li>
+<li>C/S模式——socket、RPC、RMI</li>
+</ol>
+<h3 id="线程之间的同步方式有四种"><a href="#线程之间的同步方式有四种" class="headerlink" title="线程之间的同步方式有四种"></a>线程之间的同步方式有四种</h3><ol>
+<li>互斥量 Synchronized/Lock<br>如互斥对象</li>
+<li>信号量 Semphare<br>PV操作，允许同一时刻多个线程访问线程间的资源</li>
+<li>事件 Wait/Notify<br>手动置位事件和自动置位事件</li>
+</ol>
+<blockquote>
+<p>Java中的信号量</p>
+<p>Semaphore控制多个线程同时对某个资源的访问。而Lock和sychronized是锁的互斥，一个资源只能一个线程访问。单个信号量可以实现互斥锁的功能。</p>
+<p>信号量用在多线程多任务的同步。一个线程完成了某个动作就通过信号量告诉别的线程，别的线程再进行某些动作。也就是说Semaphore不一定是锁定某个资源，而可能是流程上的概念。</p>
+</blockquote>
+<h3 id="线程独享资源"><a href="#线程独享资源" class="headerlink" title="线程独享资源"></a>线程独享资源</h3><ol>
+<li>程序计数器</li>
+<li>寄存器</li>
+<li>栈</li>
+<li>状态字</li>
+</ol>
+<p>进程共有的信息存放在基础南横控制块PCB中，线程独有的信息存放在线程控制块TCB中</p>
+<h3 id="线程和进程之间的重要区别"><a href="#线程和进程之间的重要区别" class="headerlink" title="线程和进程之间的重要区别"></a>线程和进程之间的重要区别</h3><p>从逻辑角度来看，多线程的意义在于一个应用程序中，<strong>有多个执行部分可以同时执行。但操作系统并没有将多个线程看做多个独立的应用，来实现进程的调度和管理以及资源分配</strong></p>
+</div><div class="article-licensing box"><div class="licensing-title"><p>Java多线程(0) Java多线程的概念介绍</p><p><a href="https://yoveuio.github.io/2021/04/26/Java/多线程/1 多线程的一些概念介绍/">https://yoveuio.github.io/2021/04/26/Java/多线程/1 多线程的一些概念介绍/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><a href="https://yoveuio.github.io"><p>yoveuio</p></a></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2021-04-26</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2021-04-26</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icon" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="fab fa-creative-commons"></i></a><a class="icon" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="fab fa-creative-commons-by"></i></a><a class="icon" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="recommend-area"><div class="recommend-post"><span class="is-size-6 has-text-grey has-mr-7"># 相关文章</span><br><span>  1.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/%E5%8F%8C%E9%87%8D%E9%94%81%E5%AE%9A%E5%92%8C%E5%BB%B6%E8%BF%9F%E5%88%9D%E5%A7%8B%E5%8C%96/" target="_blank">Java多线程(9) 双重锁定和延迟初始化</a><br></span><span>  2.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/JMM%20happens-before%E8%A7%84%E5%88%99/" target="_blank">Java多线程(6) happens-before规则</a><br></span><span>  3.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/Fork&amp;Join%E6%A1%86%E6%9E%B6/" target="_blank">Java多线程(10) Fork&amp;Join框架</a><br></span><span>  4.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/9%20Java%E5%B9%B6%E5%8F%91%E5%B7%A5%E5%85%B7%E7%B1%BB/" target="_blank">Java多线程(8) Java并发工具类</a><br></span><span>  5.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/8%20%E9%98%BB%E5%A1%9E%E9%98%9F%E5%88%97/" target="_blank">Java多线程(7) Java阻塞队列</a><br></span><span>  6.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/6%20final%E5%9F%9F%E7%9A%84%E5%86%85%E5%AD%98%E8%AF%AD%E4%B9%89/" target="_blank">Java多线程(5) Java final域的内存语义</a><br></span><span>  7.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/5%20%E9%94%81%E5%86%85%E5%AD%98%E8%AF%AD%E4%B9%89%E7%9A%84%E5%AE%9E%E7%8E%B0/" target="_blank">Java多线程(4) Java锁的内存语义</a><br></span><span>  8.<a class="is-size-6" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/4%20%E9%94%81/" target="_blank">Java多线程(3) Java锁</a><br></span></div></div><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/social-share.js/1.0.16/css/share.min.css"><div class="social-share"></div><script src="https://cdnjs.loli.net/ajax/libs/social-share.js/1.0.16/js/social-share.min.js"></script></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/2021/04/26/Java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/2%20java%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/"><i class="level-item fas fa-chevron-left"></i><span class="level-item">Java多线程(1) Java内存模型</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/2021/04/25/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/RDD%E7%BC%96%E7%A8%8B%E4%B8%8B/"><span class="level-item">Spark(3) RDD编程(下)</span><i class="level-item fas fa-chevron-right"></i></a></div></nav><!--!--><!--!--></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="is-flex is-mobile" href="#并发编程的挑战"><span>并发编程的挑战</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#上下文切换"><span>上下文切换</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#概念说明"><span>概念说明</span></a></li><li><a class="is-flex is-mobile" href="#如何减少上下文切换"><span>如何减少上下文切换</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#死锁"><span>死锁</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#什么是死锁"><span>什么是死锁</span></a></li><li><a class="is-flex is-mobile" href="#避免死锁的常见方法"><span>避免死锁的常见方法</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#资源限制的挑战"><span>资源限制的挑战</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#什么是资源限制的挑战"><span>什么是资源限制的挑战</span></a></li><li><a class="is-flex is-mobile" href="#引发的问题"><span>引发的问题</span></a></li><li><a class="is-flex is-mobile" href="#如何解决资源限制的问题"><span>如何解决资源限制的问题</span></a></li><li><a class="is-flex is-mobile" href="#在资源限制情况下进行并发编程"><span>在资源限制情况下进行并发编程</span></a></li></ul></li></ul></li><li><a class="is-flex is-mobile" href="#进程与线程之间的区别"><span>进程与线程之间的区别</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#进程之间通信的几种方式"><span>进程之间通信的几种方式</span></a></li><li><a class="is-flex is-mobile" href="#线程之间的同步方式有四种"><span>线程之间的同步方式有四种</span></a></li><li><a class="is-flex is-mobile" href="#线程独享资源"><span>线程独享资源</span></a></li><li><a class="is-flex is-mobile" href="#线程和进程之间的重要区别"><span>线程和进程之间的重要区别</span></a></li></ul></li></ul></div></div><style>.menu-list > li > a.is-active + .menu-list { display: block; }.menu-list > li > a + .menu-list { display: none; }</style><script src="/js/toc.js" defer></script></div><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426154026.jpg" alt="Yoveuio"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Yoveuio</p><p class="is-size-6 is-block">数据开发、后端开发</p><p class="is-size-6 is-flex justify-content-center"><i class="fas fa-map-marker-alt mr-1"></i><span>中国 湖南</span></p></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives"><p class="title">26</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories"><p class="title">8</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags"><p class="title">5</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="https://github.com/yoveuio" target="_blank" rel="noopener">关注我</a></div><div class="level is-mobile"><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Github" href="https://github.com/yoveuio"><i class="fab fa-github"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Weibo" href="https://weibo.com/yoveuio"><i class="fab fa-weibo"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Email" href="/yoveuioit@outlook.com"><i class="fa fa-envelope"></i></a></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">分类</h3><ul class="menu-list"><li><a class="level is-mobile is-marginless" href="/categories/java/"><span class="level-start"><span class="level-item">java</span></span><span class="level-end"><span class="level-item tag">11</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"><span class="level-start"><span class="level-item">多线程</span></span><span class="level-end"><span class="level-item tag">11</span></span></a></li></ul></li><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/"><span class="level-start"><span class="level-item">大数据</span></span><span class="level-end"><span class="level-item tag">6</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/"><span class="level-start"><span class="level-item">Spark</span></span><span class="level-end"><span class="level-item tag">6</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/Spark-Core/"><span class="level-start"><span class="level-item">Spark Core</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/Spark-SQL/"><span class="level-start"><span class="level-item">Spark SQL</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li></ul></li></ul></li><li><a class="level is-mobile is-marginless" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="level-start"><span class="level-item">计算机网络</span></span><span class="level-end"><span class="level-item tag">8</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E5%BA%94%E7%94%A8%E5%B1%82/"><span class="level-start"><span class="level-item">应用层</span></span><span class="level-end"><span class="level-item tag">3</span></span></a></li></ul></li></ul></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">标签</h3><div class="field is-grouped is-grouped-multiline"><div class="control"><a class="tags has-addons" href="/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"><span class="tag">多线程</span><span class="tag is-grey-lightest">11</span></a></div><div class="control"><a class="tags has-addons" href="/tags/Spark/"><span class="tag">Spark</span><span class="tag is-grey-lightest">6</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="tag">计算机网络</span><span class="tag is-grey-lightest">6</span></a></div><div class="control"><a class="tags has-addons" href="/tags/HTTP-%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="tag">HTTP,计算机网络</span><span class="tag is-grey-lightest">1</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C-HTTP/"><span class="tag">计算机网络,HTTP</span><span class="tag is-grey-lightest">1</span></a></div></div></div></div></div><div class="column-right-shadow is-hidden-widescreen"></div></div></div></div></section><footer class="footer"><div class="container"><div class="level"><div class="level-start"><a class="footer-logo is-block mb-2" href="/"><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153630.gif" alt="Yoveuio Blog" height="28"></a><p class="size-small"><span>&copy; 2021 yoveuio</span>  Powered by <a href="https://hexo.io/" target="_blank">Hexo</a> &amp; <a href="https://github.com/ppoffice/hexo-theme-icarus" target="_blank">Icarus</a> &amp; <a href="https://github.com/removeif/hexo-theme-amazing" target="_blank">Amazing</a> <br><span>© 版权说明：[本网站所有内容均收集于互联网或自己创作,<br />&nbsp;&nbsp;&nbsp;&nbsp;方便于网友与自己学习交流，如有侵权，请联系yoveuioit@outlook.com，立即处理]<br /></span><span><span id="statistic-times">loading...</span><script>function createTime(time) {
+            var n = new Date(time);
+            now.setTime(now.getTime() + 250),
+                days = (now - n) / 1e3 / 60 / 60 / 24,
+                dnum = Math.floor(days),
+                hours = (now - n) / 1e3 / 60 / 60 - 24 * dnum,
+                hnum = Math.floor(hours),
+            1 == String(hnum).length && (hnum = "0" + hnum),
+                minutes = (now - n) / 1e3 / 60 - 1440 * dnum - 60 * hnum,
+                mnum = Math.floor(minutes),
+            1 == String(mnum).length && (mnum = "0" + mnum),
+                seconds = (now - n) / 1e3 - 86400 * dnum - 3600 * hnum - 60 * mnum,
+                snum = Math.round(seconds),
+            1 == String(snum).length && (snum = "0" + snum),
+                document.getElementById("statistic-times").innerHTML = "❤️本站自 <strong>"+time.split(" ")[0].replace(/\//g,".")+"</strong> 已运行 <strong>" + dnum + "</strong> 天 <strong>" + hnum + "</strong> 小时 <strong>" + mnum + "</strong> 分 <strong>" + snum + "</strong> 秒！❤️";
+        }var now = new Date();setInterval("createTime('2021/04/26 00:00:00')", 250,"");</script><br></span></p></div><div class="level-end"><div class="field has-addons"><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Creative Commons" href="https://creativecommons.org/"><i class="fab fa-creative-commons"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/"><i class="fab fa-creative-commons-by"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Download on GitHub" href="https://github.com/removeif/hexo-theme-amazing"><i class="fab fa-github"></i></a></p></div></div></div></div></footer><script src="https://cdnjs.loli.net/ajax/libs/moment.js/2.22.2/moment-with-locales.min.js"></script><script src="https://cdnjs.loli.net/ajax/libs/clipboard.js/2.0.4/clipboard.min.js" async></script><script>moment.locale("zh-CN");</script><script>var IcarusThemeSettings = {
+            article: {
+                highlight: {
+                    clipboard: true,
+                    fold: 'unfolded'
+                }
+            }
+        };</script><script src="/js/column.js"></script><script src="/js/animation.js"></script><a id="back-to-top" title="回到顶端" href="javascript:;"><i class="fas fa-chevron-up"></i></a><script src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><script src="https://cdnjs.loli.net/ajax/libs/lightgallery/1.6.8/js/lightgallery.min.js" defer></script><script src="https://cdnjs.loli.net/ajax/libs/justifiedGallery/3.7.0/js/jquery.justifiedGallery.min.js" defer></script><script>window.addEventListener("load", () => {
+            if (typeof $.fn.lightGallery === 'function') {
+                $('.article').lightGallery({ selector: '.gallery-item' });
+            }
+            if (typeof $.fn.justifiedGallery === 'function') {
+                if ($('.justified-gallery > p > .gallery-item').length) {
+                    $('.justified-gallery > p > .gallery-item').unwrap();
+                }
+                $('.justified-gallery').justifiedGallery();
+            }
+        });</script><!--!--><!--!--><!--!--><script src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script src="/js/insight.js" defer></script><script>document.addEventListener('DOMContentLoaded', function () {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        });</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.js"></script><script type="text/javascript">var pjax = new Pjax({
+            elements: "a",//代表点击链接就更新
+            selectors: [  //代表要更新的节点
+                ".section",
+                "title"
+            ],
+            cache: true,
+            cacheBust:false
+        })
+
+        function loadBusuanzi(){
+        $.getScript("//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js", function () {});
+        }
+
+        function loadMathJax() { //加载mathjax
+            $.getScript("//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_CHTML", function () {
+                MathJax.Hub.Config({ tex2jax: { inlineMath: [['$', '$'], ['\(', '\)']] } });
+                var math = document.getElementsByClassName("entry-content")[0];
+                MathJax.Hub.Queue(["Typeset", MathJax.Hub, math]);
+            });
+        };
+
+        // 开始 PJAX 执行的函数
+        document.addEventListener('pjax:send', function () {
+        });
+        
+        // PJAX 完成之后执行的函数，可以和上面的重载放在一起
+        document.addEventListener('pjax:complete', function () {
+            $(".section").css({opacity:1});
+            if(false){
+                $.getScript('/js/comment-issue-data.js',function(){loadIssueData('undefined','undefined','undefined','undefined',undefined);});
+            }
+            if(false){
+                loadMathJax();
+            }
+            loadMainJs(jQuery, window.moment, window.ClipboardJS, window.IcarusThemeSettings);
+            loadBackTop();
+            loadBusuanzi();
+            if(typeof loadBanner == 'function'){
+                loadBanner();
+            }
+        });</script></body></html>

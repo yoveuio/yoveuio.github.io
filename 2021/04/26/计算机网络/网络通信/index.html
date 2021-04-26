@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><meta><title>网络通信的基本概念 - Yoveuio Blog</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Yoveuio Blog"><meta name="msapplication-TileImage" content="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153615.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Yoveuio Blog"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="OSI参考模型 应用层：所有能产生网络流量的程序 表示层：在传输之前是否进行加密或者压缩处理。处理一些基本信息：如何解码方法 会话层：建立会话进行数据包的传输：查木马一般用这一层特性 传输层：可靠传输 流量控制  不可靠传输（如不需要切割数据包） 网络层：负责选择最佳路径 规划ip地址 数据链路层：帧的开始与结束 透明传输 差错校验 物理层：接口标准 电器标准 如何在物理链路传输更快的速度"><meta property="og:type" content="blog"><meta property="og:title" content="Yoveuio"><meta property="og:url" content="https://yoveuio.github.io/"><meta property="og:site_name" content="Yoveuio"><meta property="og:description" content="OSI参考模型 应用层：所有能产生网络流量的程序 表示层：在传输之前是否进行加密或者压缩处理。处理一些基本信息：如何解码方法 会话层：建立会话进行数据包的传输：查木马一般用这一层特性 传输层：可靠传输 流量控制  不可靠传输（如不需要切割数据包） 网络层：负责选择最佳路径 规划ip地址 数据链路层：帧的开始与结束 透明传输 差错校验 物理层：接口标准 电器标准 如何在物理链路传输更快的速度"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://cdn.jsdelivr.net/gh/removeif/removeif-demo@latest/img/avatar.png"><meta property="article:published_time" content="2021-04-26T12:58:19.614Z"><meta property="article:modified_time" content="2021-04-26T13:25:56.189Z"><meta property="article:author" content="Yoveuio"><meta property="article:tag" content="计算机网络"><meta property="twitter:card" content="summary"><meta property="twitter:image" content="https://cdn.jsdelivr.net/gh/removeif/removeif-demo@latest/img/avatar.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://yoveuio.github.io/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1/"},"headline":"Yoveuio Blog","image":["https://yoveuio.github.io/img/og_image.png"],"datePublished":"2021-04-26T12:58:19.614Z","dateModified":"2021-04-26T13:25:56.189Z","author":{"@type":"Person","name":"yoveuio"},"description":"OSI参考模型 应用层：所有能产生网络流量的程序 表示层：在传输之前是否进行加密或者压缩处理。处理一些基本信息：如何解码方法 会话层：建立会话进行数据包的传输：查木马一般用这一层特性 传输层：可靠传输 流量控制  不可靠传输（如不需要切割数据包） 网络层：负责选择最佳路径 规划ip地址 数据链路层：帧的开始与结束 透明传输 差错校验 物理层：接口标准 电器标准 如何在物理链路传输更快的速度"}</script><link rel="canonical" href="https://yoveuio.github.io/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1/"><link rel="icon" href="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153615.png"><meta name="referrer" content="no-referrer-when-downgrade"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/font-awesome/5.12.0/css/all.min.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/highlight.js/9.12.0/styles/atom-one-light.min.css"><link rel="stylesheet" href="https://fonts.loli.net/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro"><link rel="stylesheet" href="/css/default.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/font-awesome/5.12.0/css/all.min.css"><link rel="stylesheet" href="https://fonts.loli.net/css?family=Ubuntu:400,600|Source+Code+Pro|Monda:300,300italic,400,400italic,700,700italic|Roboto Slab:300,300italic,400,400italic,700,700italic|Microsoft YaHei:300,300italic,400,400italic,700,700italic|PT Mono:300,300italic,400,400italic,700,700italic&amp;amp;subset=latin,latin-ext|Inconsolata|Itim|Lobster.css"><script src="https://cdnjs.loli.net/ajax/libs/jquery/3.3.1/jquery.min.js"></script><script src="/js/globalUtils.js"></script><style>body>.footer,body>.navbar,body>.section{opacity:0}</style><!--!--><!--!--><script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" defer></script><!--!--><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/lightgallery/1.6.8/css/lightgallery.min.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/justifiedGallery/3.7.0/css/justifiedGallery.min.css"><!--!--><!--!--><script src="https://cdnjs.loli.net/ajax/libs/pace/1.0.2/pace.min.js"></script><meta name="generator" content="Hexo 5.4.0"></head><body class="is-3-column has-navbar-fixed-top"><nav class="navbar navbar-main is-fixed-top"><div class="container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153630.gif" alt="Yoveuio Blog" height="28"></a></div><div class="navbar-menu"><div class="navbar-start"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="Download on GitHub" href="https://github.com/removeif/hexo-theme-amazing"><i class="fab fa-github"></i></a><a class="navbar-item is-hidden-tablet catalogue" title="目录" href="javascript:;"><i class="fas fa-list-ul"></i></a><a class="navbar-item search" title="搜索" href="javascript:;"><i class="fas fa-search"></i></a><a class="navbar-item" id="night-nav" title="Night Mode" href="javascript:;"><i class="fas fa-moon" id="night-icon"></i></a></div></div></div></nav><script type="text/javascript" src="/js/theme-setting.js"></script><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><!--!--><div class="card"><article class="card-content article" role="article"><div class="article-meta size-small is-uppercase level is-mobile"><div class="level-left"><i class="far fa-calendar-plus"> </i>2021-04-26  <a class="commentCountImg" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1/#comment-container"><span class="display-none-class">/2021/04/26/计算机网络/网络通信/</span><i class="far fa-comment-dots"></i> <span class="commentCount" id="6ea40216e07587301c129654b397a920">99+</span>  </a><span class="level-item"><i class="far fa-clock"> </i>8 分钟  <i class="fas fa-pencil-alt"> </i>1.2 k</span><span class="level-item" id="busuanzi_container_page_pv"><span id="busuanzi_value_page_pv">0</span>次访问</span></div></div><h1 class="title is-3 is-size-4-mobile">网络通信的基本概念</h1><div class="content"><h3 id="OSI参考模型"><a href="#OSI参考模型" class="headerlink" title="OSI参考模型"></a>OSI参考模型</h3><blockquote>
+<p>应用层：所有能产生网络流量的程序</p>
+<p>表示层：在传输之前是否进行加密或者压缩处理。处理一些基本信息：如何解码方法</p>
+<p>会话层：建立会话进行数据包的传输：查木马一般用这一层特性</p>
+<p>传输层：可靠传输 流量控制  不可靠传输（如不需要切割数据包）</p>
+<p>网络层：负责选择最佳路径 规划ip地址</p>
+<p>数据链路层：帧的开始与结束 透明传输 差错校验</p>
+<p>物理层：接口标准 电器标准 如何在物理链路传输更快的速度</p>
+</blockquote>
+<span id="more"></span>
+
+<h5 id="利用率"><a href="#利用率" class="headerlink" title="利用率"></a>利用率</h5><p>利用率有信道利用率与网络利用率两种</p>
+<p>令D<sub>0</sub>表示网络空闲时的时延, D表示网络当前的时延，那么在适当的假定条件下<br>$$<br>D=D_0\div(1-U)<br>$$</p>
+<h2 id="物理层"><a href="#物理层" class="headerlink" title="物理层"></a>物理层</h2><h3 id="2-1-物理层的基本概念"><a href="#2-1-物理层的基本概念" class="headerlink" title="2.1 物理层的基本概念"></a>2.1 物理层的基本概念</h3><p>==主要功能：完成相邻节点间二进制位流的透明传输（不用管实现）==</p>
+<p>DTE：数据终端设备（网络边缘部分）</p>
+<p>DCE：数据电路端接设备</p>
+<p><strong>物理层的四个特性</strong></p>
+<figure class="highlight tex"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">1、机械特性</span><br><span class="line">	指明接口所用接线器的形状和尺寸、引线数目和排列、固定和锁定装置等等</span><br><span class="line">2、电气特性</span><br><span class="line">	指明在接口电缆的各条线上出现的电压的范围</span><br><span class="line">3、功能特性</span><br><span class="line">	指明某条线上出现的某一电平的表示何种意义</span><br><span class="line">4、过程特性</span><br><span class="line">	指明对于不同功能的各种可能事件的出现顺序</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="2-2-数据通信的基础知识"><a href="#2-2-数据通信的基础知识" class="headerlink" title="2.2 数据通信的基础知识"></a>2.2 数据通信的基础知识</h3><p><strong>几个术语</strong></p>
+<figure class="highlight tex"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">数据（data）：运送数据的实体</span><br><span class="line">信号（signal）：数据在传输过程中电磁波的表示形式</span><br><span class="line">模拟信号（analog signal）：信号幅值是连续变化的信号</span><br><span class="line">数字信号（digital signal）：信号幅值是离散的，如用两种不同的电平去表示0、1比特序列的电压脉冲信号</span><br><span class="line">码元（code）：在使用时间域的波形表示数字信号时，代表不同离散数值的基本波形</span><br><span class="line">基带信号（baseband）：</span><br><span class="line">带通信号（band pass）：</span><br></pre></td></tr></table></figure>
+
+<p><strong>有关信号的几个基本概念</strong></p>
+<figure class="highlight tex"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">信号传输类型：</span><br><span class="line">	数字信号</span><br><span class="line">	模拟信号</span><br><span class="line">通信方式</span><br><span class="line">	串行通信</span><br><span class="line">	并行通信</span><br><span class="line">同步方式</span><br><span class="line">	异步通信</span><br><span class="line">		字节中中带了控制信息</span><br><span class="line">	同步通信</span><br></pre></td></tr></table></figure>
+
+<p><strong>数字基带信号调制成带通信号的原因</strong></p>
+<p>低频载波无法远距离传输</p>
+<blockquote>
+<p>如何将计算机产生的二进制基带信号调制成带通信号？</p>
+<p>选择正弦波或余弦波作为载波</p>
+<p>s(t)=Acos(2πft+Φ )</p>
+<p><strong>幅移键控</strong>（ASK）</p>
+<p>载波的幅值随基带数字信号变化</p>
+<p><strong>频移键控</strong>（FSK）</p>
+<p>载波的频率随基带数字信号变化</p>
+<p><strong>相移键控</strong>（PSK）</p>
+<p>载波的初始相位随基带数字信号变化</p>
+</blockquote>
+<blockquote>
+<p><strong>接收方：</strong></p>
+<p><strong>正交振幅调制</strong>（QAM）</p>
+</blockquote>
+<p><strong>信道的极限容量</strong></p>
+<p>数据率：指每秒发送的二进制位数</p>
+<p>码元速率（单位波特）：每秒发送的码元</p>
+<blockquote>
+<p>码元速率与数据率成正比</p>
+<p>任何实际的信道都不是理想的，在传输信号会产生各种失真以及带来多种干扰</p>
+</blockquote>
+<p>信道容量：信道能够无错误传输的最高数据率</p>
+<h5 id="奈氏准则"><a href="#奈氏准则" class="headerlink" title="奈氏准则"></a>奈氏准则</h5><p>理想条件下，为了避免码间串扰，码元的传输速率的上限值是2w</p>
+<p>设L为离散</p>
+<p>n<strong>C=2Wlog2L</strong></p>
+<h5 id="香农定理"><a href="#香农定理" class="headerlink" title="香农定理"></a>香农定理</h5><p>香农用信息论的理论推导出了带宽受限且有高斯白噪声干扰的信道的极限、无差错的信息传输速率</p>
+<p>极限传输速率：C=Wlog2(1+S/N)    b/s    W：信道宽度</p>
+<p>求信噪比常用分贝：dB=10log10(S/N)</p>
+<h5 id="码片序列"><a href="#码片序列" class="headerlink" title="码片序列"></a>码片序列</h5><p>如某站点使用：</p>
+<p>码片序列二进制码：1</p>
+<p>二进制码反码：0</p>
+<h5 id="码片序列的正交关系"><a href="#码片序列的正交关系" class="headerlink" title="码片序列的正交关系"></a>码片序列的正交关系</h5><p>令向量S代表站S的码片向量， 向量T代表T站码片向量</p>
+<p>如果两向量相乘为0， 则码片正交</p>
+<h5 id="PCM脉码调制"><a href="#PCM脉码调制" class="headerlink" title="PCM脉码调制"></a>PCM脉码调制</h5><h5 id="同步光纤网SONET"><a href="#同步光纤网SONET" class="headerlink" title="同步光纤网SONET"></a>同步光纤网SONET</h5><p>同步光纤网的各级始终都来自一个十分精准的时钟</p>
+<h5 id="同步数字信号"><a href="#同步数字信号" class="headerlink" title="同步数字信号"></a>同步数字信号</h5><h3 id="2-6-宽带接入技术"><a href="#2-6-宽带接入技术" class="headerlink" title="2.6 宽带接入技术"></a>2.6 宽带接入技术</h3><h5 id="xDSL技术"><a href="#xDSL技术" class="headerlink" title="xDSL技术"></a>xDSL技术</h5><p>数字技术对现有的模拟电话用户改造，使能够承载宽带业务</p>
+<h5 id="HFC网技术"><a href="#HFC网技术" class="headerlink" title="HFC网技术"></a>HFC网技术</h5><h5 id="FTTx技术"><a href="#FTTx技术" class="headerlink" title="FTTx技术"></a>FTTx技术</h5></div><div class="article-licensing box"><div class="licensing-title"><p>网络通信的基本概念</p><p><a href="https://yoveuio.github.io/2021/04/26/计算机网络/网络通信/">https://yoveuio.github.io/2021/04/26/计算机网络/网络通信/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><a href="https://yoveuio.github.io"><p>yoveuio</p></a></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2021-04-26</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2021-04-26</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icon" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="fab fa-creative-commons"></i></a><a class="icon" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="fab fa-creative-commons-by"></i></a><a class="icon" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="recommend-area"><div class="recommend-post"><span class="is-size-6 has-text-grey has-mr-7"># 相关文章</span><br><span>  1.<a class="is-size-6" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E4%BC%A0%E8%BE%93%E5%B1%82/" target="_blank">传输层</a><br></span><span>  2.<a class="is-size-6" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%BD%91%E7%BB%9C%E5%B1%82/" target="_blank">网络层</a><br></span><span>  3.<a class="is-size-6" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%89%A9%E7%90%86%E5%B1%82/" target="_blank">物理层</a><br></span><span>  4.<a class="is-size-6" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E6%95%B0%E6%8D%AE%E9%93%BE%E8%B7%AF%E5%B1%82/" target="_blank">数据链路层</a><br></span></div></div><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/social-share.js/1.0.16/css/share.min.css"><div class="social-share"></div><script src="https://cdnjs.loli.net/ajax/libs/social-share.js/1.0.16/js/social-share.min.js"></script></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E4%BC%A0%E8%BE%93%E5%B1%82/"><i class="level-item fas fa-chevron-left"></i><span class="level-item">传输层</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%BD%91%E7%BB%9C%E5%B1%82/"><span class="level-item">网络层</span><i class="level-item fas fa-chevron-right"></i></a></div></nav><!--!--><!--!--></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><ul class="menu-list"><li><a class="is-flex is-mobile" href="#OSI参考模型"><span>OSI参考模型</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#利用率"><span>利用率</span></a></li></ul></li></ul><li><a class="is-flex is-mobile" href="#物理层"><span>物理层</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#2-1-物理层的基本概念"><span>2.1 物理层的基本概念</span></a></li><li><a class="is-flex is-mobile" href="#2-2-数据通信的基础知识"><span>2.2 数据通信的基础知识</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#同步数字信号"><span>同步数字信号</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#2-6-宽带接入技术"><span>2.6 宽带接入技术</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#FTTx技术"><span>FTTx技术</span></a></li></ul></li></ul></li></ul></div></div><style>.menu-list > li > a.is-active + .menu-list { display: block; }.menu-list > li > a + .menu-list { display: none; }</style><script src="/js/toc.js" defer></script></div><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426154026.jpg" alt="Yoveuio"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Yoveuio</p><p class="is-size-6 is-block">数据开发、后端开发</p><p class="is-size-6 is-flex justify-content-center"><i class="fas fa-map-marker-alt mr-1"></i><span>中国 湖南</span></p></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives"><p class="title">26</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories"><p class="title">8</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags"><p class="title">5</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="https://github.com/yoveuio" target="_blank" rel="noopener">关注我</a></div><div class="level is-mobile"><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Github" href="https://github.com/yoveuio"><i class="fab fa-github"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Weibo" href="https://weibo.com/yoveuio"><i class="fab fa-weibo"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Email" href="/yoveuioit@outlook.com"><i class="fa fa-envelope"></i></a></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">分类</h3><ul class="menu-list"><li><a class="level is-mobile is-marginless" href="/categories/java/"><span class="level-start"><span class="level-item">java</span></span><span class="level-end"><span class="level-item tag">11</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"><span class="level-start"><span class="level-item">多线程</span></span><span class="level-end"><span class="level-item tag">11</span></span></a></li></ul></li><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/"><span class="level-start"><span class="level-item">大数据</span></span><span class="level-end"><span class="level-item tag">6</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/"><span class="level-start"><span class="level-item">Spark</span></span><span class="level-end"><span class="level-item tag">6</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/Spark-Core/"><span class="level-start"><span class="level-item">Spark Core</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/Spark-SQL/"><span class="level-start"><span class="level-item">Spark SQL</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li></ul></li></ul></li><li><a class="level is-mobile is-marginless" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="level-start"><span class="level-item">计算机网络</span></span><span class="level-end"><span class="level-item tag">8</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E5%BA%94%E7%94%A8%E5%B1%82/"><span class="level-start"><span class="level-item">应用层</span></span><span class="level-end"><span class="level-item tag">3</span></span></a></li></ul></li></ul></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">标签</h3><div class="field is-grouped is-grouped-multiline"><div class="control"><a class="tags has-addons" href="/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"><span class="tag">多线程</span><span class="tag is-grey-lightest">11</span></a></div><div class="control"><a class="tags has-addons" href="/tags/Spark/"><span class="tag">Spark</span><span class="tag is-grey-lightest">6</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="tag">计算机网络</span><span class="tag is-grey-lightest">6</span></a></div><div class="control"><a class="tags has-addons" href="/tags/HTTP-%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="tag">HTTP,计算机网络</span><span class="tag is-grey-lightest">1</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C-HTTP/"><span class="tag">计算机网络,HTTP</span><span class="tag is-grey-lightest">1</span></a></div></div></div></div></div><div class="column-right-shadow is-hidden-widescreen"></div></div></div></div></section><footer class="footer"><div class="container"><div class="level"><div class="level-start"><a class="footer-logo is-block mb-2" href="/"><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153630.gif" alt="Yoveuio Blog" height="28"></a><p class="size-small"><span>&copy; 2021 yoveuio</span>  Powered by <a href="https://hexo.io/" target="_blank">Hexo</a> &amp; <a href="https://github.com/ppoffice/hexo-theme-icarus" target="_blank">Icarus</a> &amp; <a href="https://github.com/removeif/hexo-theme-amazing" target="_blank">Amazing</a> <br><span>© 版权说明：[本网站所有内容均收集于互联网或自己创作,<br />&nbsp;&nbsp;&nbsp;&nbsp;方便于网友与自己学习交流，如有侵权，请联系yoveuioit@outlook.com，立即处理]<br /></span><span><span id="statistic-times">loading...</span><script>function createTime(time) {
+            var n = new Date(time);
+            now.setTime(now.getTime() + 250),
+                days = (now - n) / 1e3 / 60 / 60 / 24,
+                dnum = Math.floor(days),
+                hours = (now - n) / 1e3 / 60 / 60 - 24 * dnum,
+                hnum = Math.floor(hours),
+            1 == String(hnum).length && (hnum = "0" + hnum),
+                minutes = (now - n) / 1e3 / 60 - 1440 * dnum - 60 * hnum,
+                mnum = Math.floor(minutes),
+            1 == String(mnum).length && (mnum = "0" + mnum),
+                seconds = (now - n) / 1e3 - 86400 * dnum - 3600 * hnum - 60 * mnum,
+                snum = Math.round(seconds),
+            1 == String(snum).length && (snum = "0" + snum),
+                document.getElementById("statistic-times").innerHTML = "❤️本站自 <strong>"+time.split(" ")[0].replace(/\//g,".")+"</strong> 已运行 <strong>" + dnum + "</strong> 天 <strong>" + hnum + "</strong> 小时 <strong>" + mnum + "</strong> 分 <strong>" + snum + "</strong> 秒！❤️";
+        }var now = new Date();setInterval("createTime('2021/04/26 00:00:00')", 250,"");</script><br></span></p></div><div class="level-end"><div class="field has-addons"><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Creative Commons" href="https://creativecommons.org/"><i class="fab fa-creative-commons"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/"><i class="fab fa-creative-commons-by"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Download on GitHub" href="https://github.com/removeif/hexo-theme-amazing"><i class="fab fa-github"></i></a></p></div></div></div></div></footer><script src="https://cdnjs.loli.net/ajax/libs/moment.js/2.22.2/moment-with-locales.min.js"></script><script src="https://cdnjs.loli.net/ajax/libs/clipboard.js/2.0.4/clipboard.min.js" async></script><script>moment.locale("zh-CN");</script><script>var IcarusThemeSettings = {
+            article: {
+                highlight: {
+                    clipboard: true,
+                    fold: 'unfolded'
+                }
+            }
+        };</script><script src="/js/column.js"></script><script src="/js/animation.js"></script><a id="back-to-top" title="回到顶端" href="javascript:;"><i class="fas fa-chevron-up"></i></a><script src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><script src="https://cdnjs.loli.net/ajax/libs/lightgallery/1.6.8/js/lightgallery.min.js" defer></script><script src="https://cdnjs.loli.net/ajax/libs/justifiedGallery/3.7.0/js/jquery.justifiedGallery.min.js" defer></script><script>window.addEventListener("load", () => {
+            if (typeof $.fn.lightGallery === 'function') {
+                $('.article').lightGallery({ selector: '.gallery-item' });
+            }
+            if (typeof $.fn.justifiedGallery === 'function') {
+                if ($('.justified-gallery > p > .gallery-item').length) {
+                    $('.justified-gallery > p > .gallery-item').unwrap();
+                }
+                $('.justified-gallery').justifiedGallery();
+            }
+        });</script><!--!--><!--!--><!--!--><script src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script src="/js/insight.js" defer></script><script>document.addEventListener('DOMContentLoaded', function () {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        });</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.js"></script><script type="text/javascript">var pjax = new Pjax({
+            elements: "a",//代表点击链接就更新
+            selectors: [  //代表要更新的节点
+                ".section",
+                "title"
+            ],
+            cache: true,
+            cacheBust:false
+        })
+
+        function loadBusuanzi(){
+        $.getScript("//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js", function () {});
+        }
+
+        function loadMathJax() { //加载mathjax
+            $.getScript("//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_CHTML", function () {
+                MathJax.Hub.Config({ tex2jax: { inlineMath: [['$', '$'], ['\(', '\)']] } });
+                var math = document.getElementsByClassName("entry-content")[0];
+                MathJax.Hub.Queue(["Typeset", MathJax.Hub, math]);
+            });
+        };
+
+        // 开始 PJAX 执行的函数
+        document.addEventListener('pjax:send', function () {
+        });
+        
+        // PJAX 完成之后执行的函数，可以和上面的重载放在一起
+        document.addEventListener('pjax:complete', function () {
+            $(".section").css({opacity:1});
+            if(false){
+                $.getScript('/js/comment-issue-data.js',function(){loadIssueData('undefined','undefined','undefined','undefined',undefined);});
+            }
+            if(false){
+                loadMathJax();
+            }
+            loadMainJs(jQuery, window.moment, window.ClipboardJS, window.IcarusThemeSettings);
+            loadBackTop();
+            loadBusuanzi();
+            if(typeof loadBanner == 'function'){
+                loadBanner();
+            }
+        });</script></body></html>

@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><meta><title>传输层 - Yoveuio Blog</title><link rel="manifest" href="/manifest.json"><meta name="application-name" content="Yoveuio Blog"><meta name="msapplication-TileImage" content="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153615.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Yoveuio Blog"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="本章重点内容   运输层为相互通信的应用提供逻辑通信 端口和套接字的意义 无连接的UDP的特点 面向连接的TCP的特点 在不可靠的网络上实现可靠传输的工作原理，停止等待协议和ARQ协议 TCP的滑动窗口、流量控制、拥塞控制和连接管理"><meta property="og:type" content="blog"><meta property="og:title" content="Yoveuio"><meta property="og:url" content="https://yoveuio.github.io/"><meta property="og:site_name" content="Yoveuio"><meta property="og:description" content="本章重点内容   运输层为相互通信的应用提供逻辑通信 端口和套接字的意义 无连接的UDP的特点 面向连接的TCP的特点 在不可靠的网络上实现可靠传输的工作原理，停止等待协议和ARQ协议 TCP的滑动窗口、流量控制、拥塞控制和连接管理"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="https://cdn.jsdelivr.net/gh/removeif/removeif-demo@latest/img/avatar.png"><meta property="article:published_time" content="2021-04-26T13:22:22.404Z"><meta property="article:modified_time" content="2021-04-26T13:23:26.824Z"><meta property="article:author" content="Yoveuio"><meta property="article:tag" content="计算机网络"><meta property="twitter:card" content="summary"><meta property="twitter:image" content="https://cdn.jsdelivr.net/gh/removeif/removeif-demo@latest/img/avatar.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://yoveuio.github.io/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E4%BC%A0%E8%BE%93%E5%B1%82/"},"headline":"Yoveuio Blog","image":["https://gitee.com/yovette/Images/raw/master/img/20200824150733.png","https://gitee.com/yovette/Images/raw/master/img/20200824150831.png","https://gitee.com/yovette/Images/raw/master/img/20201116205915.png","https://gitee.com/yovette/Images/raw/master/img/20201116210438.png","https://gitee.com/yovette/Images/raw/master/img/20200824154509.png","https://gitee.com/yovette/Images/raw/master/img/20200824154634.png","https://gitee.com/yovette/Images/raw/master/img/20200824160015.png","https://gitee.com/yovette/Images/raw/master/img/20201116215234.png","https://gitee.com/yovette/Images/raw/master/img/20201118200018.png","https://gitee.com/yovette/Images/raw/master/img/20201118205809.png","https://gitee.com/yovette/Images/raw/master/img/20201118213354.png","https://gitee.com/yovette/Images/raw/master/img/20201118221107.png"],"datePublished":"2021-04-26T13:22:22.404Z","dateModified":"2021-04-26T13:23:26.824Z","author":{"@type":"Person","name":"yoveuio"},"description":"本章重点内容   运输层为相互通信的应用提供逻辑通信 端口和套接字的意义 无连接的UDP的特点 面向连接的TCP的特点 在不可靠的网络上实现可靠传输的工作原理，停止等待协议和ARQ协议 TCP的滑动窗口、流量控制、拥塞控制和连接管理"}</script><link rel="canonical" href="https://yoveuio.github.io/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E4%BC%A0%E8%BE%93%E5%B1%82/"><link rel="icon" href="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153615.png"><meta name="referrer" content="no-referrer-when-downgrade"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/font-awesome/5.12.0/css/all.min.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/highlight.js/9.12.0/styles/atom-one-light.min.css"><link rel="stylesheet" href="https://fonts.loli.net/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro"><link rel="stylesheet" href="/css/default.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/font-awesome/5.12.0/css/all.min.css"><link rel="stylesheet" href="https://fonts.loli.net/css?family=Ubuntu:400,600|Source+Code+Pro|Monda:300,300italic,400,400italic,700,700italic|Roboto Slab:300,300italic,400,400italic,700,700italic|Microsoft YaHei:300,300italic,400,400italic,700,700italic|PT Mono:300,300italic,400,400italic,700,700italic&amp;amp;subset=latin,latin-ext|Inconsolata|Itim|Lobster.css"><script src="https://cdnjs.loli.net/ajax/libs/jquery/3.3.1/jquery.min.js"></script><script src="/js/globalUtils.js"></script><style>body>.footer,body>.navbar,body>.section{opacity:0}</style><!--!--><!--!--><script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" defer></script><!--!--><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/lightgallery/1.6.8/css/lightgallery.min.css"><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/justifiedGallery/3.7.0/css/justifiedGallery.min.css"><!--!--><!--!--><script src="https://cdnjs.loli.net/ajax/libs/pace/1.0.2/pace.min.js"></script><meta name="generator" content="Hexo 5.4.0"></head><body class="is-3-column has-navbar-fixed-top"><nav class="navbar navbar-main is-fixed-top"><div class="container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153630.gif" alt="Yoveuio Blog" height="28"></a></div><div class="navbar-menu"><div class="navbar-start"><a class="navbar-item" href="/">首页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a><a class="navbar-item" href="/about">关于</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="Download on GitHub" href="https://github.com/removeif/hexo-theme-amazing"><i class="fab fa-github"></i></a><a class="navbar-item is-hidden-tablet catalogue" title="目录" href="javascript:;"><i class="fas fa-list-ul"></i></a><a class="navbar-item search" title="搜索" href="javascript:;"><i class="fas fa-search"></i></a><a class="navbar-item" id="night-nav" title="Night Mode" href="javascript:;"><i class="fas fa-moon" id="night-icon"></i></a></div></div></div></nav><script type="text/javascript" src="/js/theme-setting.js"></script><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-9-widescreen"><!--!--><div class="card"><article class="card-content article" role="article"><div class="article-meta size-small is-uppercase level is-mobile"><div class="level-left"><i class="far fa-calendar-plus"> </i>2021-04-26  <a class="commentCountImg" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E4%BC%A0%E8%BE%93%E5%B1%82/#comment-container"><span class="display-none-class">/2021/04/26/计算机网络/传输层/</span><i class="far fa-comment-dots"></i> <span class="commentCount" id="aa084d9634bbeef942916c020e303d77">99+</span>  </a><span class="level-item"><i class="far fa-clock"> </i>1 小时  <i class="fas fa-pencil-alt"> </i>7.7 k</span><span class="level-item" id="busuanzi_container_page_pv"><span id="busuanzi_value_page_pv">0</span>次访问</span></div></div><h1 class="title is-3 is-size-4-mobile">传输层</h1><div class="content"><p><strong><font style="color: #FFC0C9">本章重点内容</font></strong></p>
+<blockquote>
+<ol>
+<li>运输层为相互通信的应用提供逻辑通信</li>
+<li>端口和套接字的意义</li>
+<li>无连接的UDP的特点</li>
+<li>面向连接的TCP的特点</li>
+<li>在不可靠的网络上实现可靠传输的工作原理，停止等待协议和ARQ协议</li>
+<li>TCP的滑动窗口、流量控制、拥塞控制和连接管理</li>
+</ol>
+</blockquote>
+<span id="more"></span>
+
+<h1 id="运输层协议概述"><a href="#运输层协议概述" class="headerlink" title="运输层协议概述"></a>运输层协议概述</h1><h2 id="进程之间的通信发送"><a href="#进程之间的通信发送" class="headerlink" title="进程之间的通信发送"></a>进程之间的通信发送</h2><p>从通信和信息处理的角度看，<strong>运输层向它上面的应用层提供通信服务</strong>，它术语面向通信部分的最高层，同时也是用户功能中的最底层。只有位于网络边缘部分的主机的协议栈才有运输层</p>
+<p><strong>两个主机进行通信实际上就是两个主机中的应用进程互相通信</strong>，又称为<code>端到端的通信</code></p>
+<p><code>运输层提供应用进程间的逻辑通信</code>，即运输层逻辑上是直接通信的，但实际上是通过下层来实现的。</p>
+<h2 id="运输层的两个主要协议"><a href="#运输层的两个主要协议" class="headerlink" title="运输层的两个主要协议"></a>运输层的两个主要协议</h2><p>TCP/IP运输层的两个主要协议都是互联网的正式标准，即：</p>
+<ol>
+<li><code>用户数据报协议UDP</code></li>
+<li><code>传输控制协议TCP</code></li>
+</ol>
+<h2 id="运输层的主要功能"><a href="#运输层的主要功能" class="headerlink" title="运输层的主要功能"></a>运输层的主要功能</h2><ul>
+<li>运输层为应用进程之间提供端到端的逻辑通信</li>
+<li>运输层还要对收到的报文进行差错检测</li>
+<li>运输层需要有两种不同的运输协议，即面向连接的TCP和无连接的UDP</li>
+</ul>
+<h2 id="运输层的端口"><a href="#运输层的端口" class="headerlink" title="运输层的端口"></a>运输层的端口</h2><p>运输层使用协议端口号，或通常简称为端口。运输层拥有<code>复用</code>和<code>分用</code>的功能。应用层所有的应用进程都可以通过运输层再传到IP层，这就是复用。运输层从IP层收到发送给各应用进程的数据后，必须分别交付指明的各应用进程，这就是分用。给应用进程一个明确的标志是至关重要的。这个标志就是端口。</p>
+<h3 id="TCP的端口"><a href="#TCP的端口" class="headerlink" title="TCP的端口"></a>TCP的端口</h3><p>端口用一个16位端口号进行标志。端口号只具有本地意义，即端口号只为了标志本计算机应用层的各进程。</p>
+<p><font style="color: #FF9966"><strong>三类端口</strong></font></p>
+<ul>
+<li><strong>熟知端口</strong>，一般为0~1023</li>
+<li><strong>登记端口号</strong>，数值为1024~49151。<strong>为没有熟知端口号的应用程式使用</strong>，使用这个范围的端口号必须在IANA登记，以免重复</li>
+<li><strong>客户端口号或短暂端口号</strong>，数值为49153~65535，留给客户进程选择暂时使用。当服务器进程收到客户进程的报文时，就知道了客户进程所使用的动态端口号，使用结束后，这个端口号可供其他客户进程以后使用。</li>
+</ul>
+<h1 id="用户数据报协议UDP"><a href="#用户数据报协议UDP" class="headerlink" title="用户数据报协议UDP"></a>用户数据报协议UDP</h1><p>UDP只在IP的数据报服务之上增加了很少一点的功能，即端口的功能和差错检测的功能</p>
+<h2 id="UDP的主要特点"><a href="#UDP的主要特点" class="headerlink" title="UDP的主要特点"></a>UDP的主要特点</h2><ul>
+<li>UDP<strong>是无连接的</strong>，即发送数据之前不需要建立连接</li>
+<li>UDP<strong>使用尽最大努力交付</strong>，即不保证可靠交付，同时也不使用拥塞控制。</li>
+<li>UDP<strong>是面向报文的</strong>。UDP没有-拥塞控制，适合多媒体通信的要求</li>
+<li><strong>UDP支持一对一、一对多、多对一和多对多的交互通信</strong></li>
+<li>UDP<strong>的首部开销小</strong>，只有8个字节</li>
+</ul>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200824150733.png" alt="image-20200824150723727"></p>
+<p>UDP的首部格式<img src="https://gitee.com/yovette/Images/raw/master/img/20200824150831.png" alt="image-20200824150829839"></p>
+<p>伪首部用来计算检验和，将伪首部UDP用户数据报一起计算。不向下传送也不向上递交。</p>
+<h1 id="传输控制协议TCP概述"><a href="#传输控制协议TCP概述" class="headerlink" title="传输控制协议TCP概述"></a>传输控制协议TCP概述</h1><h2 id="TCP主要特点"><a href="#TCP主要特点" class="headerlink" title="TCP主要特点"></a>TCP主要特点</h2><ul>
+<li>TCP是面向连接的运输层协议</li>
+<li>每一条TCP连接只能有两个端点</li>
+<li>TCP提供可靠交付的服务</li>
+<li>TCP提供全双工通信</li>
+<li>面向字节流</li>
+</ul>
+<p><strong>TCP连接是一条虚连接</strong>，而不是一条真正的物理连接。TCP报文段先要传送到IP层，加上IP首部后，在传送到数据链路层。再加上数据链路层的首部和尾部才离开主机发送到物理链路。</p>
+<p>TCP和UDP在发送报文时所采用的方式完全不同，TCP并不关心应用进程一次把多长的报文发送到TCP的缓存中，而是根据对方给出的窗口值和当前网络拥塞的程度决定一个报文段应包含多少个字节。UDP发送的报文长度是应用进程给出的。如果应用程序传送到的TCP缓存的数据块太长，TCP就可以把它划分短一些再传送。</p>
+<h2 id="套接字"><a href="#套接字" class="headerlink" title="套接字"></a>套接字</h2><p>套接字 socket = (IP地址: 端口号)  </p>
+<p>每一条TCP连接唯一地被通信两端的两个端点（即套接字）所确定。即：</p>
+<p>TCP 连接 ::= {socket1, socket2} = {(IP1: port1), (IP2: port2)}   </p>
+<h2 id="可靠通信的实现"><a href="#可靠通信的实现" class="headerlink" title="可靠通信的实现"></a>可靠通信的实现</h2><p>TCP下面的网络所提供的是不可靠的传输，因此TCP必须采用适当的措施才能使得两个运输层之间的通信变得可靠。</p>
+<p><strong><font style="color: #FFC0C9">理想的传输条件有以下两个特点</font></strong></p>
+<ol>
+<li><strong>传输信道不产生差错</strong></li>
+<li><strong>不管发送方以多快的速度发送数据，接收方总是来得及处理收到的数据。</strong></li>
+</ol>
+<p>实际的网络都不具备以上两个理想条件，但我们可以使用一些可靠传输协议，当出现差错时让发送方重传出现差错的数据，并且在来不及处理收到的数据的时候及时告诉发送方适当降低发送数据的速度。</p>
+<p>在不可靠的传输网络中，可以通过<strong>确认和重传机制实现可靠的通信</strong>。可靠的传输协议常称为<code>自动重传请求ARQ</code>。ARQ表名重传的请求是<strong>自动</strong>进行的，接收方不需要请求发送方重传某个出错的分组，即发送方在没有受到确认报文会自动重传。</p>
+<p>下面将从最简单的<code>停止等待协议</code>讲起。</p>
+<h3 id="停止等待协议"><a href="#停止等待协议" class="headerlink" title="停止等待协议"></a>停止等待协议</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201116205915.png" alt="停止等待协议"></p>
+<p>停止等待协议非常简单，发送一个数据报，发送完就暂停发送，等待B的确认。B收到了就向A发送确认。A在收到了对M1的确认报文之后，就再发送下一个分组M2。当出现差错的情况，接收端就丢弃报文，其他什么也不做(不通知发送端)。发送端一段时间后没有收到确认报文就认为刚刚的分组丢了，重新发送一份，这称为<code>超时重传</code>。</p>
+<p>除此之外，还有<code>确认丢失</code>和<code>确认迟到</code>的情况，见下图：</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201116210438.png" alt="确认丢失和确认迟到"></p>
+<h3 id="信道利用率"><a href="#信道利用率" class="headerlink" title="信道利用率"></a>信道利用率</h3><p>停止等待协议的优点是简单，但缺点是信道利用率太低</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200824154509.png" alt="image-20200824154501811"></p>
+<h3 id="连续ARQ协议"><a href="#连续ARQ协议" class="headerlink" title="连续ARQ协议"></a>连续ARQ协议</h3><p>连续ARQ协议是TCP协议精髓——滑动窗口协议的最基本的概念，见下图</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200824154634.png" alt="image-20200824154633510"></p>
+<p>连续ARQ协议会发送连续的n个窗口。<strong>接收方对按序到达的最后一个报文进行确认</strong>，表示这个分组之前的所有报文都正确送达，发送方收到确认报文之后就把发送窗口向前滑动。</p>
+<p>累计确认有优点也有缺点，优点是容易实现，即时确认丢失也不必重传。但缺点是不能像发送方反映出正确收到的所有分组信息，例如发送了前五个分组，第三个分组丢了，正确收到的第4、5个分组因为发送方不知道是否正确收到而要一起重传。</p>
+<h2 id="TCP可靠通信的工作原理"><a href="#TCP可靠通信的工作原理" class="headerlink" title="TCP可靠通信的工作原理"></a>TCP可靠通信的工作原理</h2><ul>
+<li>TCP连接的每一端都必须设有两个窗口——一个发送窗口和一个接收窗口</li>
+<li>TCP的可靠传输机制用字节的序号进行控制，<strong>TCP所有的确认都是基于序号而不是基于报文段</strong>。</li>
+<li>TCP两端的<strong>四个窗口经常处于动态变化之中</strong></li>
+<li>TCP连接的往返时间RTT也不是固定不变的，需要使用特定的算法估算较为合理的重传时间。</li>
+</ul>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20200824160015.png" alt="image-20200824160014738"></p>
+<p>这里重点说明一下六个标志位：</p>
+<ul>
+<li><code>紧急URG</code>。当URG=1时，表明紧急指针字段有效。它告诉系统此报文段中有紧急数据，应尽快传送，而不要按原来的排队顺序来传送。例如用户的中断指令。</li>
+<li><code>确认ACK</code>。当ACK=1时有效，在连接建立后所有传送的报文都必须将ACK置1。</li>
+<li><code>推送PSH</code>。当两个应用进程进行交互式的通信时，有时在一端的应用进程希望在键入一个命令后立刻就能收到对方的响应，在这种情况下，TCP就可以使用推送操作，表示希望尽快地交付，而不再等到整个缓存都填满了再向上交付。</li>
+<li><code>复位RST</code>。当RST=1时，表明TCP连接中出现严重差错，必须释放连接，然后再重新建立运输链接</li>
+<li><code>同步SYN</code>。在建立连接时用来的同步序号</li>
+<li><code>终止FIN</code>。用来释放一个连接</li>
+</ul>
+<p><code>窗口</code>是指发送本报文段的一方的接收窗口。窗口值告诉对方：从本报文段首部中的确认号算起，接收方目前允许对方发送的数据量，<strong>窗口值作为接收方让发送方设置其发送窗口的依据</strong>。</p>
+<h2 id="TCP可靠传输的实现"><a href="#TCP可靠传输的实现" class="headerlink" title="TCP可靠传输的实现"></a>TCP可靠传输的实现</h2><h3 id="以字节为单位的滑动窗口"><a href="#以字节为单位的滑动窗口" class="headerlink" title="以字节为单位的滑动窗口"></a>以字节为单位的滑动窗口</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201116215234.png" alt="以字节为单位的滑动窗口"></p>
+<p>先讨论发送方A的发送窗口，发送窗口表示：在没有收到B的确认的情况下，A可以连续把窗口内的数据都发送出去，凡是已经发送过的数据，在未收到确认之前都必须暂时保留，以便在超时重传时使用。</p>
+<p>当发送窗口没有收到确认报文的时候，滑动窗口不会向前滑动，<strong>A在一段时候后(由超时计时器控制)就重传这部分数据，直到收到确认为止</strong>。</p>
+<p><strong><font style="color: #FFC0C9">需要明确的两点</font></strong></p>
+<ol>
+<li>缓存空间和序号空间都是有限的，并且都是循环使用的，最好是把它们画成圆环状的。</li>
+<li>实际上缓存或窗口中的字节数是非常之大的</li>
+</ol>
+<p><strong><font style="color: #FFC0C9">发送缓存暂时存放</font></strong></p>
+<ol>
+<li>应用程序准备发送的数据</li>
+<li>TCP已发出但尚未收到确认的数据</li>
+</ol>
+<p><strong><font style="color: #FFC0C9">接收缓存暂时存放</font></strong></p>
+<ol>
+<li>按序到达、但尚未被接收应用程序读取的数据</li>
+<li>未按序到达的数据</li>
+</ol>
+<p>**<font style="color: #FFC0C9">需要注意的三点</font>**：</p>
+<ol>
+<li>虽然A的发送窗口根据B的接收窗口设置的，<strong>但是同一时刻A的发送窗口并不一定和B的接收窗口一样大</strong>。因为网络的滞后性，并且发送方A也会根据网络当时的拥塞情况适当减小自己的发送窗口数值。</li>
+<li>对不按序到达的数据该如何处理，TCP标准并无明确规定，<strong>TCP通常对不按序到达的数据是先临时存放在接收窗口中，等到字节流中所缺少的字节收到后再按序交付上层的应用进程</strong></li>
+<li>TCP要求接收方必须有累计确认的功能，用以减少传输开销<strong>。接收方可以在合适的时候发送确认，也可以在自己有数据要发送时把确认信息顺便捎带上</strong>。不过要求接收方不应过分推迟发送确认，TCP标准规定确认推迟的时间不应超过0.5s。</li>
+</ol>
+<h3 id="超时重传的选择"><a href="#超时重传的选择" class="headerlink" title="超时重传的选择"></a>超时重传的选择</h3><p>超时计时器的超时重传时间究竟应设置为多大呢？</p>
+<p>TCP采用了一种自适应算法，它记录一个报文段发出的时间，以及收到相应确认报文的时间。这两个时间之差就是<code>报文段的往返时间RTT</code>。TCP保留了RTT的一个加权平均往返时间RTT<del>s</del>。之后每测量到一个新的RTT样本就按下式重新计算一次RTT<del>s</del>：<br>$$<br>新的RTT_s = (1- \alpha) \times (旧的RTT_s) + \alpha \times (新的RTT样本)<br>$$</p>
+<p>当$\alpha$接近0的时候表示新的RTT<del>s</del>和旧的RTT<del>s</del>相比变化不大(变化更慢)，反之收新的RTT影响大</p>
+<p>超时重传时间RTO应略大于上面的加权平均往返时间RTT<del>s</del>。<br>$$<br>RTO = RTT_s + 4 \times RTT_D<br>$$</p>
+<p>$RTT_D$是RTT的偏差的加权平均值，它与$RTT_S$和新的RTT样本之差有关。<br>$$<br>新的RTT_D = (1 - \beta) \times (旧的RTT_D) + \beta \times | RTT_S - 新的RTT样本 |<br>$$<br>这里的$\beta$是一个小于1的系数，推荐值是0.25.</p>
+<p>这里还有一个问题——当报文重传的时候，如何确定当前确认报文是对先一个的报文的确认，还是对重传的报文的确认？这对计算RTO影响非常大。</p>
+<p>现在常用的算法是：报文段每重传一次，不再使用上面的公式，而是把超时重传时间增大一些，典型的做法是增大两倍。</p>
+<h3 id="TCP的流量控制"><a href="#TCP的流量控制" class="headerlink" title="TCP的流量控制"></a>TCP的流量控制</h3><p>所谓流量控制就是<strong>让发送方的发送速率不要太快，要让对方来得及接收</strong>。</p>
+<p><img src="https://gitee.com/yovette/Images/raw/master/img/20201118200018.png" alt="利用可变窗口进行流量控制"></p>
+<p>设A向B发送数据。在连接建立时，B告诉A：“我的接收窗口rwnd=400”(这里rwnd表示receiver window)。因此发送方的发送窗口不能超过接收方给出的接收窗口。TCP窗口的窗口单位是字节而不是报文段。</p>
+<p>为了解决确认报文丢失导致死锁的僵局，TCP设置了一个<code>持续计时器</code>的机制。只要TCP连接的一方收到对方的零窗口通知，就启动持续计时器。若持续计时器设置的时间到了，就询问对方现在的窗口是否依旧是0窗口。</p>
+<h3 id="TCP的拥塞控制"><a href="#TCP的拥塞控制" class="headerlink" title="TCP的拥塞控制"></a>TCP的拥塞控制</h3><p>所谓拥塞控制就是<strong>防止过多的数据注入到网络中，这样可以使网络中的路由器或链路不致过载</strong>。拥塞控制所要做的都有一个前提，就是网络能够承受现有的网络负荷。<strong>拥塞控制是一个全局性的过程</strong>。</p>
+<p>相反流量控制往往是指点对点通行量的控制，是个端到端的问题。</p>
+<p>由于计算机网络是一个很复杂的系统，因此可以从控制理论的角度来看拥塞控制这个问题。从大的方向看，可以分为<code>开环控制</code>和<code>闭环控制</code>两种方法。开环控制就是在设计的时候在设计网络时事先将有关发生拥塞的因素考虑周到，力求网络在工作时不产生拥塞。</p>
+<p>闭环控制是基于反馈环路的概念，主要有以下几种措施：</p>
+<ol>
+<li>检测网络系统以便检测到拥塞在何时、何处发生</li>
+<li>把拥塞发生的信息传送到可采取行动的地方</li>
+<li>调整网络系统的运行以解决出现的问题</li>
+</ol>
+<blockquote>
+<p>**<font style="color: #FFC0C9">检测网络的一些指标</font>**：</p>
+<ol>
+<li>缺少缓存空间而被丢弃的分组的百分数</li>
+<li>平均队列长度</li>
+<li>超时重传的分组数</li>
+<li>平均分组时延</li>
+<li>分组时延的标准差</li>
+</ol>
+</blockquote>
+<h3 id="TCP的拥塞控制方法"><a href="#TCP的拥塞控制方法" class="headerlink" title="TCP的拥塞控制方法"></a>TCP的拥塞控制方法</h3><p>TCP进行拥塞控制的算法有四种：<code>慢开始</code>、<code>拥塞避免</code>、<code>快重传</code>、<code>快恢复</code></p>
+<p>现在的拥塞控制方法是<code>基于窗口</code>。发送方维持一个叫做<code>拥塞窗口cwnd</code>的状态变量。拥塞窗口的大小取决于网络的拥塞程序，发送方让自己的发送窗口等于拥塞窗口。</p>
+<h4 id="慢开始"><a href="#慢开始" class="headerlink" title="慢开始"></a>慢开始</h4><p>在开始传输数据时，先探测以下，然后从小到大逐渐增大发送窗口。也就是由小到大逐渐增大拥塞窗口数值</p>
+<h4 id="拥塞避免"><a href="#拥塞避免" class="headerlink" title="拥塞避免"></a>拥塞避免</h4><p>慢开始的cwnd到后面增长会非常迅速，所以设置一个慢开始门限<code>ssthresh</code>，当超过了门限之后就采用拥塞避免算法。</p>
+<p>拥塞避免算法是<strong>让拥塞窗口cwnd缓慢增大，每经过一个往返时间RTT就把发送方的拥塞窗口cwnd加1，而不是成倍增长</strong>。</p>
+<h4 id="快重传"><a href="#快重传" class="headerlink" title="快重传"></a>快重传</h4><p>当个别报文段丢失，但网络并未阻塞，如果发送方误认为阻塞而启动慢开始，就降低了传输效率</p>
+<p>快重传算法首先要求接收方不要等待自己发送数据时才进行捎带确认，而是立即发送确认，即收到了失序的报文段要立即发出对已收到的报文段的重复确认。<strong>如果收到了3个连续的重复确认报文，说明重复报文下一个报文已丢失，故接收方要立即重传丢失的报文</strong>。这样也不会出现超时而误认为出现网络拥塞。</p>
+<h4 id="快恢复"><a href="#快恢复" class="headerlink" title="快恢复"></a>快恢复</h4><p>快恢复是指当发送方直到只是丢失了个别的报文段，于是不启动慢开始，而是调整门限值为<code>ssthresh=cwnd/2</code>，然后开始拥塞避免算法。</p>
+<h3 id="主动队列管理AQM"><a href="#主动队列管理AQM" class="headerlink" title="主动队列管理AQM"></a>主动队列管理AQM</h3><p>主动队列管理是指不要等待路由器的队列长度以及达到最大值而不得不丢弃后面到达的分组，而是当使用队列，当队列长度达到一定值时发出预警。</p>
+<blockquote>
+<p>实现：当队列长度达到一定时，对到达的分组按照一定的丢弃概率p丢弃，后面的发送方会根据已丢失的报文降低cwnd。即根据早期征兆实现负反馈</p>
+</blockquote>
+<h2 id="TCP的运输连接管理"><a href="#TCP的运输连接管理" class="headerlink" title="TCP的运输连接管理"></a>TCP的运输连接管理</h2><p>运输连接有三个阶段，即：连接建立、数据传送和连接释放。</p>
+<p>在TCP连接建立过程中要解决以下三个问题：</p>
+<ol>
+<li>使每一方能够确知对方的存在</li>
+<li>要允许对方协商一些参数(如最大窗口值、能否使用窗口扩大选项和时间戳选项以及服务质量等)</li>
+<li>能够对运输实体资源(如缓存大小、连接表中的项目等)进行分配</li>
+</ol>
+<h3 id="TCP连接的建立"><a href="#TCP连接的建立" class="headerlink" title="TCP连接的建立"></a>TCP连接的建立</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201118205809.png" alt="image-20201118205808255"></p>
+<p>假定主机A运行的是TCP客户程序，而B运行的是TCP服务器程序。一开始都处于<code>CLOSED(关闭状态)</code>。</p>
+<p><strong><font style="color: #FFC0C9">准备阶段</font></strong></p>
+<p>B的TCP服务器进程先创建传输控制块TCB。准备接受客户进程的连接请求。然后服务器进程就处于<code>LISTEN(收听状态)</code>。</p>
+<p><strong><font style="color: #FFC0C9">第一次握手:</font></strong></p>
+<p>A的TCP客户进程也是创建传输控制模块TCB。然后建立TCP连接时，向B发出连接请求报文段，这时首部中的同步位<code>SYN=1</code>，同时选择一个初始序号<code>seq=x</code>。TCP规定，<strong>SYN报文段不能携带数据，但要消耗掉一个序号</strong>(因为需要收到服务端ack=x+1的确认报文)。这时TCP客户进程进入<code>SYS-SENT(同步已发送)</code>状态。</p>
+<p><strong><font style="color: #FFC0C9">第二次握手</font></strong></p>
+<p>B收到连接请求报文之后，如同意建立连接，则向A发送确认，在确认报文段中应把SYN和ACK位都置1，确认号是<code>ack=x+1</code>，同时也为自己选择一个初始序号seq=y。同样这个报文段也不能携带数据，但同样要消耗掉一个序号。这时TCP服务器进程进入<code>SYN-RCVD(同步收到)</code>状态。</p>
+<p><strong><font style="color: #FFc0c9">第三次握手</font></strong></p>
+<p>TCP客户进程收到B的确认之后，还要向B发出确认。确认报文段的ACK置1，确认号ack=y+1。而自己的序号seq=x+1。TCP规定，这个报文段可以携带数据，但如果不携带数据则不消耗序号(不需要对应的确认号)。这时，TCP连接以及建立，A进入<code>ESTABLISHED(已建立连接)</code>状态</p>
+<p>当B收到A的确认之后，也进入<code>ESTABLESHED</code>状态</p>
+<blockquote>
+<p>消不消耗序号是根据是否需要对应的TCP确认报文来的。TCP的确认是依据不重复的序号。</p>
+</blockquote>
+<h3 id="为什么TCP要进行第三次握手？"><a href="#为什么TCP要进行第三次握手？" class="headerlink" title="为什么TCP要进行第三次握手？"></a>为什么TCP要进行第三次握手？</h3><p><strong>主要是为了防止已失效的连接请求报文段突然又传送到了B发生错误</strong>。</p>
+<p><strong><font style="color:#FFc0c9"> 考虑下面情况：</font></strong></p>
+<p>当A传了一次连接请求，出现网络拥塞、报文丢失等情况而长时间留滞。一段时间之后重新到达了B，倘若A不发送确认报文，就会出现B单方面认为已经建立连接，并一直等待A发来数据。这样B的许多资源就被浪费了。</p>
+<p>采用三报文握手就可以防止上述现象的发生。</p>
+<h3 id="TCP的连接释放"><a href="#TCP的连接释放" class="headerlink" title="TCP的连接释放"></a>TCP的连接释放</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201118213354.png" alt="image-20201118213351155"></p>
+<p>数据传输结束后，通信的双方都可释放连接。现在A和B都处于<code>ESTABLISHED</code>状态。</p>
+<p><strong><font style="color:#FFc0c9">第一次挥手</font></strong></p>
+<p>A应用进程先向其TCP发出连接释放报文段，并停止在发送数据，主动关闭TCP连接。A把连接释放报文段首部的终止控制位FIN置1，其序号seq=u，它等于前面已传送过的数据的最后一个字节加1。这时A进入<code>FIN-WAIT-1</code>状态，等待B的确认。FIN报文段即时不携带数据也消耗一个序号。</p>
+<p><strong><font style="color:#FFc0c9">第二次挥手</font></strong></p>
+<p>B收到连接释放报文段后即发出确认，确认号是<code>ack=u+1</code>，而这个报文段自己的序号是v，等于B前面传送的数据的最后一个字节的序号+1。然后B就进入<code>CLOSE-WAIT(关闭等待状态)</code>。TCP服务器进程这时应通知高层应用进程，因而从A到B这个方向的连接就释放了。这时TCP的连接处于半关闭状态，即<strong>A已经没有数据要发送了，但B若发送数据，A仍要接收</strong>。</p>
+<p>A接收到B的确认之后，就进入<code>FIN-WAIT-2</code>状态，等待B发出的连接释放报文段</p>
+<p><strong><font style="color:#FFc0c9">第三次回收</font></strong></p>
+<p>若B没有要向A发送的数据，其应用进程就通知TCP释放连接。这时B发出的连接释放报文使FIN=1。假定B的序号位w。**B必须重复上次已发送过的确认号<code>ack=u+1**</code>。这时B就进入<code>LAST-ACK(最后确认)</code>状态，等待A的确认。</p>
+<p><strong><font style="color:#FFc0c9">第四次回收</font></strong></p>
+<p>A在收到B的连接释放报文段之后，必须对此发出确认，在确认报文段中把ACK置1，确认号w+1，而自己的序号是<code>seq=u+1</code>。然后进入到<code>TIME-WAIT(时间等待)</code>状态。现在TCP连接还没有释放掉，<strong>必须经过<code>时间等待计时器</code>设置的时间2MSL后，A才进入到CLOSED状态</strong>。<code>时间MSL叫做最长报文段寿命</code>。一般建议为两分钟。</p>
+<p>B只要接收A发出的确认就进入<code>CLOSED</code>状态。</p>
+<h3 id="时间等待计时器的原因"><a href="#时间等待计时器的原因" class="headerlink" title="时间等待计时器的原因"></a>时间等待计时器的原因</h3><ol>
+<li>为了保证A发送的最后一个ACK能够到达B，防止报文段丢失</li>
+<li>防止出现上文<code>已失效的连接请求报文段</code>出现在本报文中，2MSL可以让本连接持续时间内所产生的所有报文狗从网络中消失。这样就可以使下一个新的连接中不会出现这种旧的连接请求报文段。</li>
+</ol>
+<p>除此之外，TCP还有一个<code>保活计时器</code>来处理客户端突然断开连接的特殊情况。例如，两小时后没有收到客户的数据就每隔75秒发送一次检测报文，连续10次没有响应就判断客户端故障。</p>
+<h3 id="TCP的有限状态机"><a href="#TCP的有限状态机" class="headerlink" title="TCP的有限状态机"></a>TCP的有限状态机</h3><p><img src="https://gitee.com/yovette/Images/raw/master/img/20201118221107.png" alt="有限状态机"></p>
+<h2 id="为什么三次握手四次挥手？"><a href="#为什么三次握手四次挥手？" class="headerlink" title="为什么三次握手四次挥手？"></a>为什么三次握手四次挥手？</h2><h2 id="TCP与UDP的比较"><a href="#TCP与UDP的比较" class="headerlink" title="TCP与UDP的比较"></a>TCP与UDP的比较</h2><h3 id="从各自的特点来看"><a href="#从各自的特点来看" class="headerlink" title="从各自的特点来看"></a>从各自的特点来看</h3><ul>
+<li><strong>TCP是面向连接的，而UDP是无连接的</strong>；<br>TCP发送数据前先要建立连接，而UDP发送数据前不需要建立连接。</li>
+<li><strong>TCP保证可靠性，UDP不保证可靠性</strong>；<br>TCP具有很多的可靠性保证机制（TCP的连接管理、超时重传、序号和确认序号、流量控制和拥塞控制都能保证TCP数据包能够无差错、不丢失、按序到达），但是UDP没有这些可靠性保证机制，因此UDP就无法保证可靠性。</li>
+<li><strong>TCP面向字节流，UDP面向数据报</strong>；<br>TCP接收和发送数据就像流水一样，可以一次接收多个，或者一次接收少半部分但是可以接收多次；但是UDP发送多少就要接收多少，如果接收的数据少于发送的数据，那么少的那部分数据永远也接收不到了。</li>
+<li><strong>每一条TCP连接只能用于点点之间一对一进行</strong>，而UDP支持一对一、一对多、多对多的交互通信；</li>
+<li><strong>TCP不仅有接收缓冲区还有发送缓冲区，而UDP只有接收缓冲区</strong>。</li>
+<li>T<strong>CP速度比较慢，因为要创建连接，保证可靠性和有序性</strong>等。<strong>UDP更加适合速度比较敏感的应用</strong>，比如在线视频媒体，电视广播，多人在线游戏等。</li>
+<li>TCP重量级，UDP轻量级；体现在元数据头大小是，TCP20字节，UDP80字节</li>
+</ul>
+<p><strong>综上</strong>：TCP适合金融等大多数领域，UDP适合游戏和娱乐场景</p>
+<h3 id="从编程来看"><a href="#从编程来看" class="headerlink" title="从编程来看"></a>从编程来看</h3><ol>
+<li>采用UDP编程比采用TCP编程要简单很多；</li>
+<li>对于服务器来说:<ul>
+<li>调用socket创建一个套接字；    </li>
+<li>调用bind函数，绑定端口号和IP地址到socket上；当这两步做完之后UDP就可以与客户端进行数据传输，但是TCP还需要调用listen使得创建的套接字变为被动套接字可以一直监听客户端的到来，接下来调用accept一直阻塞等待客户端的连接，当有客户端连接之后此时accept返回一个新的文件描述符，这个文件描述符用来和客户端进行数据交互，此时客户端与服务器就可以进行数据交互。</li>
+<li>因此对于服务器来说，TCP服务器需要调用如下接口：socket、bind、listen、accept、close（关闭文件描述符）；对于UDP来说，只用进行socket、bind、close。</li>
+</ul>
+</li>
+<li>对于客户端来说:<ul>
+<li>调用socket函数创建套接字；</li>
+<li>此时UDP的客户端就可以向服务器发送数据，但是TCP的客户端还需要调用connect 函数与TCP服务器建立连接，当连接建立成功之后，TCP客户端就可以向TCP服务器发送数据。</li>
+<li>因此对于客户端来说，TCP客户端需要调用如下接口：socket、connect、close（关闭文件描述符）；对于UDP来说，只用进行socket、close。</li>
+<li>注意： UDP是可以调用connect函数的，但是UDP的connect函数和TCP的connect函数调用确是大相径庭的，这里没有三次握手过程。内核只是检查是否存在立即可知的错误(比如目的地址不可达)，记录对端的IP和端口号，然后立即返回调用进程。</li>
+</ul>
+</li>
+<li>TCP套接字可以采用write/read、recvfrom/sendto来进行数据的的读写，但是UDP套接字不能采用write/read，因为read和write是面向字节流的。</li>
+</ol>
+<h2 id="为什么TCP采用随机序列号"><a href="#为什么TCP采用随机序列号" class="headerlink" title="为什么TCP采用随机序列号"></a>为什么TCP采用随机序列号</h2><ol>
+<li>用于控制每次发送的数据包是否接受，当发送端发送数据包时，数据包中会包含一个序列号，接收端接收到时，会返回发送端序列号，用来通知接收数据接受完毕</li>
+<li>防止接受网络上沾滞的TCP包，如果都从0开始，极容易接收之前断开连接发送的沾滞包，虽然每次TCP都会使用一个UUID作为标记，但是每次都携带UUID比较浪费流量，所以就采用随机序列号的方法</li>
+<li>防止Hack猜测序列号，然后伪装TCP报文</li>
+</ol>
+</div><div class="article-licensing box"><div class="licensing-title"><p>传输层</p><p><a href="https://yoveuio.github.io/2021/04/26/计算机网络/传输层/">https://yoveuio.github.io/2021/04/26/计算机网络/传输层/</a></p></div><div class="licensing-meta level is-mobile"><div class="level-left"><div class="level-item is-narrow"><div><h6>作者</h6><a href="https://yoveuio.github.io"><p>yoveuio</p></a></div></div><div class="level-item is-narrow"><div><h6>发布于</h6><p>2021-04-26</p></div></div><div class="level-item is-narrow"><div><h6>更新于</h6><p>2021-04-26</p></div></div><div class="level-item is-narrow"><div><h6>许可协议</h6><p><a class="icon" rel="noopener" target="_blank" title="Creative Commons" href="https://creativecommons.org/"><i class="fab fa-creative-commons"></i></a><a class="icon" rel="noopener" target="_blank" title="Attribution" href="https://creativecommons.org/licenses/by/4.0/"><i class="fab fa-creative-commons-by"></i></a><a class="icon" rel="noopener" target="_blank" title="Noncommercial" href="https://creativecommons.org/licenses/by-nc/4.0/"><i class="fab fa-creative-commons-nc"></i></a></p></div></div></div></div></div><div class="recommend-area"><div class="recommend-post"><span class="is-size-6 has-text-grey has-mr-7"># 相关文章</span><br><span>  1.<a class="is-size-6" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1/" target="_blank">网络通信的基本概念</a><br></span><span>  2.<a class="is-size-6" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%BD%91%E7%BB%9C%E5%B1%82/" target="_blank">网络层</a><br></span><span>  3.<a class="is-size-6" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%89%A9%E7%90%86%E5%B1%82/" target="_blank">物理层</a><br></span><span>  4.<a class="is-size-6" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E6%95%B0%E6%8D%AE%E9%93%BE%E8%B7%AF%E5%B1%82/" target="_blank">数据链路层</a><br></span></div></div><link rel="stylesheet" href="https://cdnjs.loli.net/ajax/libs/social-share.js/1.0.16/css/share.min.css"><div class="social-share"></div><script src="https://cdnjs.loli.net/ajax/libs/social-share.js/1.0.16/js/social-share.min.js"></script></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/2021/04/26/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1/"><span class="level-item">网络通信的基本概念</span><i class="level-item fas fa-chevron-right"></i></a></div></nav><!--!--><!--!--></div><div class="column column-left is-4-tablet is-4-desktop is-3-widescreen  order-1 is-sticky"><div class="card widget" id="toc" data-type="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="is-flex is-mobile" href="#运输层协议概述"><span>运输层协议概述</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#进程之间的通信发送"><span>进程之间的通信发送</span></a></li><li><a class="is-flex is-mobile" href="#运输层的两个主要协议"><span>运输层的两个主要协议</span></a></li><li><a class="is-flex is-mobile" href="#运输层的主要功能"><span>运输层的主要功能</span></a></li><li><a class="is-flex is-mobile" href="#运输层的端口"><span>运输层的端口</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#TCP的端口"><span>TCP的端口</span></a></li></ul></li></ul></li><li><a class="is-flex is-mobile" href="#用户数据报协议UDP"><span>用户数据报协议UDP</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#UDP的主要特点"><span>UDP的主要特点</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#传输控制协议TCP概述"><span>传输控制协议TCP概述</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#TCP主要特点"><span>TCP主要特点</span></a></li><li><a class="is-flex is-mobile" href="#套接字"><span>套接字</span></a></li><li><a class="is-flex is-mobile" href="#可靠通信的实现"><span>可靠通信的实现</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#停止等待协议"><span>停止等待协议</span></a></li><li><a class="is-flex is-mobile" href="#信道利用率"><span>信道利用率</span></a></li><li><a class="is-flex is-mobile" href="#连续ARQ协议"><span>连续ARQ协议</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#TCP可靠通信的工作原理"><span>TCP可靠通信的工作原理</span></a></li><li><a class="is-flex is-mobile" href="#TCP可靠传输的实现"><span>TCP可靠传输的实现</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#以字节为单位的滑动窗口"><span>以字节为单位的滑动窗口</span></a></li><li><a class="is-flex is-mobile" href="#超时重传的选择"><span>超时重传的选择</span></a></li><li><a class="is-flex is-mobile" href="#TCP的流量控制"><span>TCP的流量控制</span></a></li><li><a class="is-flex is-mobile" href="#TCP的拥塞控制"><span>TCP的拥塞控制</span></a></li><li><a class="is-flex is-mobile" href="#快恢复"><span>快恢复</span></a></li><li><a class="is-flex is-mobile" href="#主动队列管理AQM"><span>主动队列管理AQM</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#TCP的运输连接管理"><span>TCP的运输连接管理</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#TCP连接的建立"><span>TCP连接的建立</span></a></li><li><a class="is-flex is-mobile" href="#为什么TCP要进行第三次握手？"><span>为什么TCP要进行第三次握手？</span></a></li><li><a class="is-flex is-mobile" href="#TCP的连接释放"><span>TCP的连接释放</span></a></li><li><a class="is-flex is-mobile" href="#时间等待计时器的原因"><span>时间等待计时器的原因</span></a></li><li><a class="is-flex is-mobile" href="#TCP的有限状态机"><span>TCP的有限状态机</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#为什么三次握手四次挥手？"><span>为什么三次握手四次挥手？</span></a></li><li><a class="is-flex is-mobile" href="#TCP与UDP的比较"><span>TCP与UDP的比较</span></a><ul class="menu-list"><li><a class="is-flex is-mobile" href="#从各自的特点来看"><span>从各自的特点来看</span></a></li><li><a class="is-flex is-mobile" href="#从编程来看"><span>从编程来看</span></a></li></ul></li><li><a class="is-flex is-mobile" href="#为什么TCP采用随机序列号"><span>为什么TCP采用随机序列号</span></a></li></ul></li></ul></div></div><style>.menu-list > li > a.is-active + .menu-list { display: block; }.menu-list > li > a + .menu-list { display: none; }</style><script src="/js/toc.js" defer></script></div><div class="card widget" data-type="profile"><div class="card-content"><nav class="level"><div class="level-item has-text-centered flex-shrink-1"><div><figure class="image is-128x128 mx-auto mb-2"><img class="avatar is-rounded" src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426154026.jpg" alt="Yoveuio"></figure><p class="title is-size-4 is-block" style="line-height:inherit;">Yoveuio</p><p class="is-size-6 is-block">数据开发、后端开发</p><p class="is-size-6 is-flex justify-content-center"><i class="fas fa-map-marker-alt mr-1"></i><span>中国 湖南</span></p></div></div></nav><nav class="level is-mobile"><div class="level-item has-text-centered is-marginless"><div><p class="heading">文章</p><a href="/archives"><p class="title">26</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">分类</p><a href="/categories"><p class="title">8</p></a></div></div><div class="level-item has-text-centered is-marginless"><div><p class="heading">标签</p><a href="/tags"><p class="title">5</p></a></div></div></nav><div class="level"><a class="level-item button is-primary is-rounded" href="https://github.com/yoveuio" target="_blank" rel="noopener">关注我</a></div><div class="level is-mobile"><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Github" href="https://github.com/yoveuio"><i class="fab fa-github"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Weibo" href="https://weibo.com/yoveuio"><i class="fab fa-weibo"></i></a><a class="level-item button is-transparent is-marginless" target="_blank" rel="noopener" title="Email" href="/yoveuioit@outlook.com"><i class="fa fa-envelope"></i></a></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">分类</h3><ul class="menu-list"><li><a class="level is-mobile is-marginless" href="/categories/java/"><span class="level-start"><span class="level-item">java</span></span><span class="level-end"><span class="level-item tag">11</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/java/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"><span class="level-start"><span class="level-item">多线程</span></span><span class="level-end"><span class="level-item tag">11</span></span></a></li></ul></li><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/"><span class="level-start"><span class="level-item">大数据</span></span><span class="level-end"><span class="level-item tag">6</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/"><span class="level-start"><span class="level-item">Spark</span></span><span class="level-end"><span class="level-item tag">6</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/Spark-Core/"><span class="level-start"><span class="level-item">Spark Core</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li><li><a class="level is-mobile is-marginless" href="/categories/%E5%A4%A7%E6%95%B0%E6%8D%AE/Spark/Spark-SQL/"><span class="level-start"><span class="level-item">Spark SQL</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li></ul></li></ul></li><li><a class="level is-mobile is-marginless" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="level-start"><span class="level-item">计算机网络</span></span><span class="level-end"><span class="level-item tag">8</span></span></a><ul class="mr-0"><li><a class="level is-mobile is-marginless" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/%E5%BA%94%E7%94%A8%E5%B1%82/"><span class="level-start"><span class="level-item">应用层</span></span><span class="level-end"><span class="level-item tag">3</span></span></a></li></ul></li></ul></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">标签</h3><div class="field is-grouped is-grouped-multiline"><div class="control"><a class="tags has-addons" href="/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"><span class="tag">多线程</span><span class="tag is-grey-lightest">11</span></a></div><div class="control"><a class="tags has-addons" href="/tags/Spark/"><span class="tag">Spark</span><span class="tag is-grey-lightest">6</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="tag">计算机网络</span><span class="tag is-grey-lightest">6</span></a></div><div class="control"><a class="tags has-addons" href="/tags/HTTP-%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/"><span class="tag">HTTP,计算机网络</span><span class="tag is-grey-lightest">1</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C-HTTP/"><span class="tag">计算机网络,HTTP</span><span class="tag is-grey-lightest">1</span></a></div></div></div></div></div><div class="column-right-shadow is-hidden-widescreen"></div></div></div></div></section><footer class="footer"><div class="container"><div class="level"><div class="level-start"><a class="footer-logo is-block mb-2" href="/"><img src="https://cdn.jsdelivr.net/gh/yoveuio/images/images/202020210426153630.gif" alt="Yoveuio Blog" height="28"></a><p class="size-small"><span>&copy; 2021 yoveuio</span>  Powered by <a href="https://hexo.io/" target="_blank">Hexo</a> &amp; <a href="https://github.com/ppoffice/hexo-theme-icarus" target="_blank">Icarus</a> &amp; <a href="https://github.com/removeif/hexo-theme-amazing" target="_blank">Amazing</a> <br><span>© 版权说明：[本网站所有内容均收集于互联网或自己创作,<br />&nbsp;&nbsp;&nbsp;&nbsp;方便于网友与自己学习交流，如有侵权，请联系yoveuioit@outlook.com，立即处理]<br /></span><span><span id="statistic-times">loading...</span><script>function createTime(time) {
+            var n = new Date(time);
+            now.setTime(now.getTime() + 250),
+                days = (now - n) / 1e3 / 60 / 60 / 24,
+                dnum = Math.floor(days),
+                hours = (now - n) / 1e3 / 60 / 60 - 24 * dnum,
+                hnum = Math.floor(hours),
+            1 == String(hnum).length && (hnum = "0" + hnum),
+                minutes = (now - n) / 1e3 / 60 - 1440 * dnum - 60 * hnum,
+                mnum = Math.floor(minutes),
+            1 == String(mnum).length && (mnum = "0" + mnum),
+                seconds = (now - n) / 1e3 - 86400 * dnum - 3600 * hnum - 60 * mnum,
+                snum = Math.round(seconds),
+            1 == String(snum).length && (snum = "0" + snum),
+                document.getElementById("statistic-times").innerHTML = "❤️本站自 <strong>"+time.split(" ")[0].replace(/\//g,".")+"</strong> 已运行 <strong>" + dnum + "</strong> 天 <strong>" + hnum + "</strong> 小时 <strong>" + mnum + "</strong> 分 <strong>" + snum + "</strong> 秒！❤️";
+        }var now = new Date();setInterval("createTime('2021/04/26 00:00:00')", 250,"");</script><br></span></p></div><div class="level-end"><div class="field has-addons"><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Creative Commons" href="https://creativecommons.org/"><i class="fab fa-creative-commons"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/"><i class="fab fa-creative-commons-by"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Download on GitHub" href="https://github.com/removeif/hexo-theme-amazing"><i class="fab fa-github"></i></a></p></div></div></div></div></footer><script src="https://cdnjs.loli.net/ajax/libs/moment.js/2.22.2/moment-with-locales.min.js"></script><script src="https://cdnjs.loli.net/ajax/libs/clipboard.js/2.0.4/clipboard.min.js" async></script><script>moment.locale("zh-CN");</script><script>var IcarusThemeSettings = {
+            article: {
+                highlight: {
+                    clipboard: true,
+                    fold: 'unfolded'
+                }
+            }
+        };</script><script src="/js/column.js"></script><script src="/js/animation.js"></script><a id="back-to-top" title="回到顶端" href="javascript:;"><i class="fas fa-chevron-up"></i></a><script src="/js/back_to_top.js" defer></script><!--!--><!--!--><!--!--><script src="https://cdnjs.loli.net/ajax/libs/lightgallery/1.6.8/js/lightgallery.min.js" defer></script><script src="https://cdnjs.loli.net/ajax/libs/justifiedGallery/3.7.0/js/jquery.justifiedGallery.min.js" defer></script><script>window.addEventListener("load", () => {
+            if (typeof $.fn.lightGallery === 'function') {
+                $('.article').lightGallery({ selector: '.gallery-item' });
+            }
+            if (typeof $.fn.justifiedGallery === 'function') {
+                if ($('.justified-gallery > p > .gallery-item').length) {
+                    $('.justified-gallery > p > .gallery-item').unwrap();
+                }
+                $('.justified-gallery').justifiedGallery();
+            }
+        });</script><!--!--><!--!--><!--!--><script src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script src="/js/insight.js" defer></script><script>document.addEventListener('DOMContentLoaded', function () {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        });</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.js"></script><script type="text/javascript">var pjax = new Pjax({
+            elements: "a",//代表点击链接就更新
+            selectors: [  //代表要更新的节点
+                ".section",
+                "title"
+            ],
+            cache: true,
+            cacheBust:false
+        })
+
+        function loadBusuanzi(){
+        $.getScript("//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js", function () {});
+        }
+
+        function loadMathJax() { //加载mathjax
+            $.getScript("//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_CHTML", function () {
+                MathJax.Hub.Config({ tex2jax: { inlineMath: [['$', '$'], ['\(', '\)']] } });
+                var math = document.getElementsByClassName("entry-content")[0];
+                MathJax.Hub.Queue(["Typeset", MathJax.Hub, math]);
+            });
+        };
+
+        // 开始 PJAX 执行的函数
+        document.addEventListener('pjax:send', function () {
+        });
+        
+        // PJAX 完成之后执行的函数，可以和上面的重载放在一起
+        document.addEventListener('pjax:complete', function () {
+            $(".section").css({opacity:1});
+            if(false){
+                $.getScript('/js/comment-issue-data.js',function(){loadIssueData('undefined','undefined','undefined','undefined',undefined);});
+            }
+            if(false){
+                loadMathJax();
+            }
+            loadMainJs(jQuery, window.moment, window.ClipboardJS, window.IcarusThemeSettings);
+            loadBackTop();
+            loadBusuanzi();
+            if(typeof loadBanner == 'function'){
+                loadBanner();
+            }
+        });</script></body></html>
