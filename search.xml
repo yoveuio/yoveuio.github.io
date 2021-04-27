@@ -1432,6 +1432,93 @@
 <p>Spark所有的内置数据源都是可以发现和推断分区信息的。例如，我们可以将所有之前是通过的人口数据存储到下面的目录结构中，使用两个列——<code>gender</code>和<code>country</code>作为分区列。</p>
 <figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">path</span><br><span class="line">└── to</span><br><span class="line">    └── table</span><br><span class="line">        ├── gender&#x3D;male</span><br><span class="line">        │   ├── ...</span><br><span class="line">        │   │</span><br><span class="line">        │   ├── country&#x3D;US</span><br><span class="line">        │   │   └── data.parquet</span><br><span class="line">        │   ├── country&#x3D;CN</span><br><span class="line">        │   │   └── data.parquet</span><br><span class="line">        │   └── ...</span><br><span class="line">        └── gender&#x3D;female</span><br><span class="line">            ├── ...</span><br><span class="line">            │</span><br><span class="line">            ├── country&#x3D;US</span><br><span class="line">            │   └── data.parquet</span><br><span class="line">            ├── country&#x3D;CN</span><br><span class="line">            │   └── data.parquet</span><br><span class="line">            └── ...</span><br></pre></td></tr></table></figure>
 
+<p>将<code>path/to/table</code>路径下面的内容传递给<code>SparkSession.read.parquet</code>或者<code>SparkSession.read.load</code>，Spark可以从路径推断出分区信息。现在DataFrame如下所示：</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">root</span><br><span class="line">|-- name: string (nullable &#x3D; true)</span><br><span class="line">|-- age: long (nullable &#x3D; true)</span><br><span class="line">|-- gender: string (nullable &#x3D; true)</span><br><span class="line">|-- country: string (nullable &#x3D; true)</span><br></pre></td></tr></table></figure>
+
+<p>注意，分区的列的数据类型是Spark自己推测的。目前支持数字数据类型、日期、时间戳和字符串类型。有时，用户不想要Spark自己推断数据类型，对于这种情况，可以通过<code>spark.sql.sources.partitionColumnTypeInference.enabled</code>(默认为true)设置。如果这个变量被设置为false，所有的分区列都会使用String类型。</p>
+<p>从Spark 1.6.0开始，<code>partition discovery</code>(分区发现)默认仅在给定路径下查找分区。对于上面的例子，如果用户将<code>path/to/table/gender=male</code>传递给<code>SparkSession.read.parquet</code>或者<code>SparkSession.read.load</code>，<code>gender</code>不会被看作是一个分区列。如果用户指定<code>partition discovery</code>的<code>base path</code>，可以使用<code>basePath</code>选项。像上面的例子，设置basePath为<code>path/to/table</code>后，就算只看部分路径，也是能将<code>gender</code>作为分区列。</p>
+<h2 id="Schema-Merging"><a href="#Schema-Merging" class="headerlink" title="Schema Merging"></a>Schema Merging</h2><p>类似于Protocol Buffer, Avro, 和Thrift。Parquet也支持<code>schema evolution</code>(schema演化)。用户能能从一个简单的schema开始，逐渐添加更多的列到schema中。最后，用户可以得到多种不同的复杂的Parquet文件，但是它们有着互相兼容的架构。Parquet可以检测到这种情况，并合并这些schema。</p>
+<p>schema是一种昂贵的操作，在大多数情况下不会使用，因此从Spark 1.5.0开始就默认关闭它了。我们可以通过下面两种方式开启它：</p>
+<ul>
+<li>当读取Parquet文件的时候，设置数据源选项<code>mergeSchema</code>为true</li>
+<li>设置全局SQL选项<code>spark.sql.parquet.mergeSchema</code>为true</li>
+</ul>
+<figure class="highlight scala"><figcaption><span>SQLDataSourceExample.scala</span></figcaption><table><tr><td class="code"><pre><span class="line"><span class="comment">// This is used to implicitly convert an RDD to a DataFrame.</span></span><br><span class="line"><span class="keyword">import</span> spark.implicits._</span><br><span class="line"></span><br><span class="line"><span class="comment">// Create a simple DataFrame, store into a partition directory</span></span><br><span class="line"><span class="keyword">val</span> squaresDF = spark.sparkContext.makeRDD(<span class="number">1</span> to <span class="number">5</span>).map(i =&gt; (i, i * i)).toDF(<span class="string">&quot;value&quot;</span>, <span class="string">&quot;square&quot;</span>)</span><br><span class="line">squaresDF.write.parquet(<span class="string">&quot;data/test_table/key=1&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// Create another DataFrame in a new partition directory,</span></span><br><span class="line"><span class="comment">// adding a new column and dropping an existing column</span></span><br><span class="line"><span class="keyword">val</span> cubesDF = spark.sparkContext.makeRDD(<span class="number">6</span> to <span class="number">10</span>).map(i =&gt; (i, i * i * i)).toDF(<span class="string">&quot;value&quot;</span>, <span class="string">&quot;cube&quot;</span>)</span><br><span class="line">cubesDF.write.parquet(<span class="string">&quot;data/test_table/key=2&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// Read the partitioned table</span></span><br><span class="line"><span class="keyword">val</span> mergedDF = spark.read.option(<span class="string">&quot;mergeSchema&quot;</span>, <span class="string">&quot;true&quot;</span>).parquet(<span class="string">&quot;data/test_table&quot;</span>)</span><br><span class="line">mergedDF.printSchema()</span><br><span class="line"></span><br><span class="line"><span class="comment">// The final schema consists of all 3 columns in the Parquet files together</span></span><br><span class="line"><span class="comment">// with the partitioning column appeared in the partition directory paths</span></span><br><span class="line"><span class="comment">// root</span></span><br><span class="line"><span class="comment">//  |-- value: int (nullable = true)</span></span><br><span class="line"><span class="comment">//  |-- square: int (nullable = true)</span></span><br><span class="line"><span class="comment">//  |-- cube: int (nullable = true)</span></span><br><span class="line"><span class="comment">//  |-- key: int (nullable = true)</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="Hive-metastore-Parquet表转换"><a href="#Hive-metastore-Parquet表转换" class="headerlink" title="Hive metastore Parquet表转换"></a>Hive metastore Parquet表转换</h2><p>当从Hive metastore parquet表中读取数据或者写入未分区的表时，Spark会尝试使用自己的Parquet支持而不是Hive SerDe来获取更好的性能。这种行为由<code>spark.sql.hive.convertMetastoreParquet</code>配置控制(默认开启)</p>
+<h3 id="Hive-Parquet-Schema协调"><a href="#Hive-Parquet-Schema协调" class="headerlink" title="Hive/Parquet Schema协调"></a>Hive/Parquet Schema协调</h3><p>从table schema处理的角度上面来说，Hive和Parquet有两个关键的不同点</p>
+<ol>
+<li>Hive不区分大小写</li>
+<li>Hive认为所有列都可以为空，而nullability特性在Parquet是非常重要的。</li>
+</ol>
+<p>由于上面的原因，在将一个<code>Hive metastore Parquet table</code>转换成一个<code>Spark SQL Parquet table</code>的时候我们必须对<code>Hive metastore schema</code>和<code>Parquet schema</code>进行协调。协调规则有：</p>
+<ol>
+<li>无论是不是为<code>nullability</code>，两个schema中具有相同名称的字段必须具有相同的数据类型。协调字段应该具有Parquet的数据类型，以便遵循nullabitity</li>
+<li>协调后的schema应该完全包含在Hive Metastore schema中定义的字段<ul>
+<li>仅仅出现在Parquet schema的字段会在协调schema中销毁</li>
+<li>只出现在hive metastore schema的字段会以<code>nullable</code>字段的形式添加到schema中。</li>
+</ul>
+</li>
+</ol>
+<h3 id="metadata-Refreshing-元数据刷新"><a href="#metadata-Refreshing-元数据刷新" class="headerlink" title="metadata Refreshing(元数据刷新)"></a>metadata Refreshing(元数据刷新)</h3><p>为了获取更好的性能，Spark SQL缓存Parquet的元数据。当Hive metastore Parquet table是能被转换的时候，被转换的表的元数据也会被缓存。如果那些表被Hive或者其他工具更新的时候，我们就需要自己去刷新它们，来保证数据的一致性。</p>
+<figure class="highlight scala"><table><tr><td class="code"><pre><span class="line"><span class="comment">// spark is an existing SparkSession</span></span><br><span class="line">spark.catalog.refreshTable(<span class="string">&quot;my_table&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<h2 id="Configuration"><a href="#Configuration" class="headerlink" title="Configuration"></a>Configuration</h2><p>Parquet的配置能使用SparkSession的<code>setConf</code>方法，或者使用SQL运行<code>SET key=value</code>指令。</p>
+<blockquote>
+<p>来自官方文档：<a href="https://spark.apache.org/docs/latest/sql-data-sources-parquet.html">Parquet Files - Spark 3.1.1 Documentation (apache.org)</a></p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th align="left">Property Name</th>
+<th align="left">Default</th>
+<th align="left">Meaning</th>
+<th align="left">Since Version</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><code>spark.sql.parquet.binaryAsString</code></td>
+<td align="left">false</td>
+<td align="left">Some other Parquet-producing systems, in particular Impala, Hive, and older versions of Spark SQL, do not differentiate between binary data and strings when writing out the Parquet schema. This flag tells Spark SQL to interpret binary data as a string to provide compatibility with these systems.</td>
+<td align="left">1.1.1</td>
+</tr>
+<tr>
+<td align="left"><code>spark.sql.parquet.int96AsTimestamp</code></td>
+<td align="left">true</td>
+<td align="left">Some Parquet-producing systems, in particular Impala and Hive, store Timestamp into INT96. This flag tells Spark SQL to interpret INT96 data as a timestamp to provide compatibility with these systems.</td>
+<td align="left">1.3.0</td>
+</tr>
+<tr>
+<td align="left"><code>spark.sql.parquet.compression.codec</code></td>
+<td align="left">snappy</td>
+<td align="left">Sets the compression codec used when writing Parquet files. If either <code>compression</code> or <code>parquet.compression</code> is specified in the table-specific options/properties, the precedence would be <code>compression</code>, <code>parquet.compression</code>, <code>spark.sql.parquet.compression.codec</code>. Acceptable values include: none, uncompressed, snappy, gzip, lzo, brotli, lz4, zstd. Note that <code>zstd</code> requires <code>ZStandardCodec</code> to be installed before Hadoop 2.9.0, <code>brotli</code> requires <code>BrotliCodec</code> to be installed.</td>
+<td align="left">1.1.1</td>
+</tr>
+<tr>
+<td align="left"><code>spark.sql.parquet.filterPushdown</code></td>
+<td align="left">true</td>
+<td align="left">Enables Parquet filter push-down optimization when set to true.</td>
+<td align="left">1.2.0</td>
+</tr>
+<tr>
+<td align="left"><code>spark.sql.hive.convertMetastoreParquet</code></td>
+<td align="left">true</td>
+<td align="left">When set to false, Spark SQL will use the Hive SerDe for parquet tables instead of the built in support.</td>
+<td align="left">1.1.1</td>
+</tr>
+<tr>
+<td align="left"><code>spark.sql.parquet.mergeSchema</code></td>
+<td align="left">false</td>
+<td align="left">When true, the Parquet data source merges schemas collected from all data files, otherwise the schema is picked from the summary file or a random data file if no summary file is available.</td>
+<td align="left">1.5.0</td>
+</tr>
+<tr>
+<td align="left"><code>spark.sql.parquet.writeLegacyFormat</code></td>
+<td align="left">false</td>
+<td align="left">If true, data will be written in a way of Spark 1.4 and earlier. For example, decimal values will be written in Apache Parquet’s fixed-length byte array format, which other systems such as Apache Hive and Apache Impala use. If false, the newer format in Parquet will be used. For example, decimals will be written in int-based format. If Parquet output is intended for use with systems that do not support this newer format, set to true.</td>
+<td align="left">1.6.0</td>
+</tr>
+</tbody></table>
 ]]></content>
       <categories>
         <category>大数据</category>
